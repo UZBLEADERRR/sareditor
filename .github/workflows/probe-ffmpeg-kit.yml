@@ -2,8 +2,10 @@ name: Probe ffmpeg-kit mirrors
 
 # Throwaway diagnostic: this sandbox cannot reach Maven mirrors, so the runner
 # is used to find out which sources still carry the withdrawn ffmpeg-kit AARs.
+# workflow_dispatch only registers from the default branch, so this runs on push.
 on:
-  workflow_dispatch:
+  push:
+    branches: ['claude/**']
 
 jobs:
   probe:
