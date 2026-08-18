@@ -158,7 +158,7 @@ src/analysis/
   parse.ts               ffmpeg loglarini o‘qiydigan toza parserlar
   silence · scenes · beats · loudness · autocut
 src/ai/
-  providers/llm.ts       Anthropic SDK + OpenAI-mos + Gemini
+  providers/llm.ts       Anthropic · OpenAI-mos · Gemini (hammasi fetch orqali)
   transcribe.ts          Audio ajratish, bo‘laklash, so‘z vaqtlari
   director.ts            Montaj rejasi, tarjima, post matni
 src/screens/             Home · Editor (6 panel) · Settings

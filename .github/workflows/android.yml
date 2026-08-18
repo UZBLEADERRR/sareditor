@@ -32,6 +32,12 @@ jobs:
       - name: Render tests
         run: npm test
 
+      # Metro resolution failures (a dependency reaching for a Node built-in,
+      # a bad subpath export) only surface when the bundle is actually built.
+      # Doing it here fails in a minute instead of thirteen minutes into Gradle.
+      - name: Bundle the JS
+        run: npx expo export --platform android
+
   apk:
     name: Android APK
     runs-on: ubuntu-latest

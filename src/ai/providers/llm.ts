@@ -1,11 +1,7 @@
-import Anthropic, {
-  APIError,
-  AuthenticationError,
-  BadRequestError,
-  RateLimitError,
-} from '@anthropic-ai/sdk';
-
 import { AiConfigError, AiRequestError, LLM_PROVIDERS, type LlmConfig } from '../types';
+
+/** Pinned per Anthropic's versioning policy; the API requires it on every call. */
+const ANTHROPIC_VERSION = '2023-06-01';
 
 export type LlmRequest = {
   system: string;
@@ -41,54 +37,69 @@ export async function completeText(config: LlmConfig, request: LlmRequest): Prom
   }
 }
 
+/**
+ * Anthropic Messages API over plain fetch.
+ *
+ * The official SDK is the usual choice, but it cannot be bundled here: it does
+ * `await import('node:fs')` to read credential profiles from disk, which Metro
+ * refuses to resolve for a React Native target. Every other provider in this
+ * file already goes through fetch, the app only ever needs one non-streaming
+ * call, and the key comes from the user rather than a profile on disk — so the
+ * SDK's value here was close to zero and its cost was a bundle that would not
+ * build.
+ */
 async function completeAnthropic(config: LlmConfig, request: LlmRequest): Promise<string> {
-  const client = new Anthropic({
-    apiKey: config.apiKey,
-    baseURL: config.baseUrl || LLM_PROVIDERS.anthropic.defaultBaseUrl,
-    // The key belongs to the person holding the phone; there is no server to
-    // hide it behind, and the SDK refuses to run in a non-Node runtime without
-    // this acknowledgement.
-    dangerouslyAllowBrowser: true,
+  const baseUrl = (config.baseUrl || LLM_PROVIDERS.anthropic.defaultBaseUrl).replace(/\/$/, '');
+
+  const response = await fetch(`${baseUrl}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': config.apiKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      // The key belongs to the person holding the phone; there is no server to
+      // proxy through, which is exactly what this header acknowledges.
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: request.maxTokens ?? 8000,
+      system: request.system,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'medium' },
+      messages: [{ role: 'user', content: request.user }],
+    }),
+    signal: request.signal,
   });
 
-  try {
-    const response = await client.messages.create(
-      {
-        model: config.model,
-        max_tokens: request.maxTokens ?? 8000,
-        system: request.system,
-        thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium' },
-        messages: [{ role: 'user', content: request.user }],
-      },
-      { signal: request.signal }
-    );
-
-    if (response.stop_reason === 'refusal') {
-      throw new AiRequestError(
-        `Model so‘rovni bajarmadi: ${response.stop_details?.explanation ?? 'sabab ko‘rsatilmadi'}`
-      );
-    }
-
-    return response.content
-      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-      .trim();
-  } catch (error) {
-    if (error instanceof AiRequestError) throw error;
-    if (error instanceof APIError) {
-      throw new AiRequestError(anthropicMessage(error), error.status);
-    }
-    throw error;
+  const payload = await readJson(response);
+  if (!response.ok) {
+    throw new AiRequestError(anthropicErrorMessage(payload, response.status), response.status);
   }
+
+  if (payload?.stop_reason === 'refusal') {
+    throw new AiRequestError(
+      `Model so‘rovni bajarmadi: ${payload?.stop_details?.explanation ?? 'sabab ko‘rsatilmadi'}`
+    );
+  }
+
+  // Thinking blocks come back alongside the answer; only the text is wanted.
+  const text = (payload?.content ?? [])
+    .filter((block: { type?: string }) => block?.type === 'text')
+    .map((block: { text?: string }) => block.text ?? '')
+    .join('\n')
+    .trim();
+
+  if (!text) throw new AiRequestError('Anthropic bo‘sh javob qaytardi');
+  return text;
 }
 
-function anthropicMessage(error: APIError): string {
-  if (error instanceof AuthenticationError) return 'Anthropic kaliti noto‘g‘ri.';
-  if (error instanceof RateLimitError) return 'Limit tugadi, birozdan keyin urinib ko‘ring.';
-  if (error instanceof BadRequestError) return `So‘rov noto‘g‘ri: ${error.message}`;
-  return `Anthropic xatosi (${error.status}): ${error.message}`;
+function anthropicErrorMessage(payload: any, status: number): string {
+  if (status === 401 || status === 403) return 'Anthropic kaliti noto‘g‘ri.';
+  if (status === 429) return 'Limit tugadi, birozdan keyin urinib ko‘ring.';
+  const message = payload?.error?.message;
+  if (status === 400 && message) return `So‘rov noto‘g‘ri: ${message}`;
+  return message ? `Anthropic xatosi (${status}): ${message}` : `Anthropic xatosi (${status})`;
 }
 
 async function completeOpenAiCompatible(config: LlmConfig, request: LlmRequest): Promise<string> {
