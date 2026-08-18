@@ -1,6 +1,7 @@
 export type RootStackParamList = {
   Home: undefined;
-  Editor: { projectId: string };
+  /** `startInAi` opens the editor with the agent already in charge. */
+  Editor: { projectId: string; startInAi?: boolean };
   Settings: undefined;
 };
 

@@ -11,7 +11,7 @@ import { uid } from '../utils/id';
 import { safeFileName } from '../ffmpeg/filters/escape';
 import { fontsDir, mediaDir, toFileUri, toNativePath } from '../utils/paths';
 
-const ALBUM_NAME = 'SAR Editor';
+const ALBUM_NAME = 'Fara Editor';
 
 /**
  * ffmpeg cannot read a `content://` URI, and picked files often live outside the

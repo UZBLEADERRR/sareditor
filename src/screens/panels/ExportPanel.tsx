@@ -268,7 +268,7 @@ export function ExportPanel({ project }: { project: Project }) {
                     try {
                       await saveToGallery(render.uri);
                       markRenderSaved(project.id, render.id);
-                      Alert.alert('Saqlandi', 'Video galereyadagi “SAR Editor” albomida.');
+                      Alert.alert('Saqlandi', 'Video galereyadagi “Fara Editor” albomida.');
                     } catch (error) {
                       Alert.alert('Saqlanmadi', (error as Error).message);
                     }

@@ -50,7 +50,7 @@ export function HomeScreen() {
   const [busy, setBusy] = React.useState(false);
 
   const startProject = React.useCallback(
-    async (mode: 'library' | 'camera') => {
+    async (mode: 'library' | 'camera', startInAi = false) => {
       setBusy(true);
       try {
         const source = mode === 'library' ? await pickVideo() : await recordVideo();
@@ -61,7 +61,7 @@ export function HomeScreen() {
           defaultPlatform as Project['export']['platform']
         );
         attachSource(project.id, source);
-        navigation.navigate('Editor', { projectId: project.id });
+        navigation.navigate('Editor', { projectId: project.id, startInAi });
       } catch (error) {
         Alert.alert('Video ochilmadi', (error as Error).message);
       } finally {
@@ -120,7 +120,40 @@ export function HomeScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 140 }]}
         ListHeaderComponent={
-          projects.length ? <Text style={styles.listHeader}>LOYIHALAR</Text> : null
+          <>
+            {/* The first thing on the screen is the thing that does the work. */}
+            <Pressable
+              style={styles.aiCard}
+              onPress={() => startProject('library', true)}
+              disabled={busy}
+            >
+              <LinearGradient
+                colors={gradients.brandWide}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.aiCardGlow}
+              />
+              <View style={styles.aiCardBody}>
+                <View style={styles.aiCardIcon}>
+                  {busy ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="sparkles" size={20} color="#fff" />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aiCardTitle}>AI bilan montaj qilish</Text>
+                  <Text style={styles.aiCardText}>
+                    Videoni tanlang va oddiy gap bilan ayting — kesadi, subtitr yozadi, tarjima
+                    qiladi, ovoz beradi va rasmlaringizni joyiga qo‘yadi.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.8)" />
+              </View>
+            </Pressable>
+
+            {projects.length ? <Text style={styles.listHeader}>LOYIHALAR</Text> : null}
+          </>
         }
         ListEmptyComponent={
           <EmptyState
@@ -294,6 +327,32 @@ const styles = StyleSheet.create({
   rowTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   rowMetaText: { ...typography.tiny, color: colors.textFaint },
+
+  aiCard: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: `${colors.accent}55`,
+    marginBottom: spacing.lg,
+  },
+  aiCardGlow: { position: 'absolute', left: 0, right: 0, top: 0, height: 3 },
+  aiCardBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  aiCardIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiCardTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  aiCardText: { ...typography.tiny, color: colors.textDim, lineHeight: 16, marginTop: 3 },
 
   dock: {
     position: 'absolute',

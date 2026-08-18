@@ -32,7 +32,7 @@ const SUGGESTIONS = [
   'Sekin joylarni 1.5x tezlat',
 ];
 
-export function AiChat({ project }: { project: Project }) {
+export function AiChat({ project, compact }: { project: Project; compact?: boolean }) {
   const settings = useSettings();
   const applyAiEdit = useProjects((state) => state.applyAiEdit);
   const undoAiEdit = useProjects((state) => state.undoAiEdit);
@@ -126,7 +126,9 @@ export function AiChat({ project }: { project: Project }) {
     markUndone(project.id, entryId);
   };
 
-  const list = entries ?? [];
+  // The dock under the timeline only has room for the tail of the thread.
+  const all = entries ?? [];
+  const list = compact ? all.slice(-4) : all;
 
   return (
     <View style={styles.wrap}>
@@ -179,7 +181,7 @@ export function AiChat({ project }: { project: Project }) {
             );
           })}
         </View>
-      ) : (
+      ) : compact ? null : (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Nima qilay?</Text>
           <Text style={styles.emptyText}>
@@ -246,7 +248,7 @@ export function AiChat({ project }: { project: Project }) {
         </Hint>
       ) : null}
 
-      {list.length ? (
+      {list.length && !compact ? (
         <Pressable onPress={() => clear(project.id)} style={styles.clearRow} hitSlop={8}>
           <Text style={styles.clearText}>Suhbatni tozalash</Text>
         </Pressable>

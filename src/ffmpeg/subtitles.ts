@@ -249,7 +249,7 @@ export function buildAss(options: AssOptions): string {
   const header = [
     '[Script Info]',
     'ScriptType: v4.00+',
-    'Title: SAR Editor captions',
+    'Title: Fara Editor captions',
     `PlayResX: ${width}`,
     `PlayResY: ${height}`,
     'WrapStyle: 0',
