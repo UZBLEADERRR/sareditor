@@ -58,6 +58,12 @@ export const AGENT_TOOLS: AgentToolSpec[] = [
     parameters: { type: 'object', properties: {} },
   },
   {
+    name: 'make_captions',
+    description:
+      'Listen to the video and write word-timed subtitles. Call this when there is no transcript yet and the request needs one — subtitles, translation, or cutting by what is said.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
     name: 'read_project',
     description: 'Read the current cut, look, captions, audio, library assets and illustrations.',
     parameters: { type: 'object', properties: {} },

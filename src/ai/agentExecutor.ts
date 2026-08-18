@@ -42,6 +42,8 @@ export type AgentServices = {
   drawImage?: (prompt: string, aspect: AspectId) => Promise<string>;
   /** Absent when no voice is configured; `add_voiceover` then refuses. */
   speak?: (text: string) => Promise<{ uri: string; durationMs: number }>;
+  /** Absent when no speech model is configured; `make_captions` then refuses. */
+  makeCaptions?: () => Promise<Transcript>;
   voiceLabel?: string;
   signal?: AbortSignal;
 };
@@ -167,6 +169,8 @@ export class AgentExecutor {
         return { result: this.readTranscript() };
       case 'read_project':
         return { result: this.readProject() };
+      case 'make_captions':
+        return this.makeCaptions();
       case 'keep_ranges':
         return this.keepRanges(args);
       case 'remove_range':
@@ -220,6 +224,35 @@ export class AgentExecutor {
       '',
       lines.length > 12000 ? `${lines.slice(0, 12000)}\n…(truncated)` : lines,
     ].join('\n');
+  }
+
+  /**
+   * Transcribes the video so the rest of the tools have something to work with.
+   *
+   * Without this the agent would have to stop and ask the creator to press a
+   * button in another panel before it could translate a caption or cut on a
+   * sentence — which is exactly the errand the agent exists to remove.
+   */
+  private async makeCaptions(): Promise<ToolExecution> {
+    if (this.transcript?.words.length) {
+      return { result: `A transcript already exists (${this.transcript.words.length} words).` };
+    }
+    const run = this.services.makeCaptions;
+    if (!run) {
+      return {
+        result:
+          'No speech model is configured, so subtitles cannot be written. Tell the creator to pick one in Settings, and carry on with anything that does not need the words.',
+      };
+    }
+
+    const transcript = await run();
+    this.transcript = transcript;
+    this.subtitle.enabled = transcript.words.length > 0;
+
+    return {
+      result: `Transcribed ${transcript.words.length} words, language ${transcript.language || 'unknown'}. Call read_transcript to see the timings.`,
+      change: `Subtitr yozildi — ${transcript.words.length} ta so‘z`,
+    };
   }
 
   private readProject(): string {

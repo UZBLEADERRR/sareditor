@@ -11,8 +11,15 @@ import {
   View,
 } from 'react-native';
 
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  useAudioRecorder,
+} from 'expo-audio';
+
 import { runAgent } from '../../ai/agent';
 import { generateImage } from '../../ai/images';
+import { transcribe } from '../../ai/transcribe';
 import { synthesize } from '../../ai/voice';
 import { Hint } from '../../components/ui';
 import { useAgentChat } from '../../store/agentChat';
@@ -46,9 +53,50 @@ export function AiChat({ project, compact }: { project: Project; compact?: boole
   const [input, setInput] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState<string | null>(null);
+  const [listening, setListening] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
 
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const ready = settings.isLlmReady();
+
+  /**
+   * Dictating the command instead of typing it.
+   *
+   * The words land in the box rather than being sent straight off: speech
+   * recognition mishears, and a misheard instruction here would re-cut the
+   * whole video before anyone could read it.
+   */
+  const toggleDictation = async () => {
+    if (listening) {
+      setListening(false);
+      setStatus('Aytganingiz o‘qilmoqda…');
+      try {
+        await recorder.stop();
+        const uri = recorder.uri;
+        if (!uri) return;
+        const transcript = await transcribe(settings.sttConfig(), uri, { durationMs: 0 });
+        setInput((current) => `${current}${current ? ' ' : ''}${transcript.text}`.trim());
+      } catch (error) {
+        Alert.alert('Eshitilmadi', (error as Error).message);
+      } finally {
+        setStatus(null);
+      }
+      return;
+    }
+
+    if (!settings.isSttReady()) {
+      Alert.alert('Nutq modeli tanlanmagan', 'Sozlamalarda nutq modelini tanlang.');
+      return;
+    }
+    const permission = await requestRecordingPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Mikrofon', 'Mikrofonga ruxsat berilmadi.');
+      return;
+    }
+    await recorder.prepareToRecordAsync();
+    recorder.record();
+    setListening(true);
+  };
 
   const send = async (text: string) => {
     const instruction = text.trim();
@@ -80,6 +128,16 @@ export function AiChat({ project, compact }: { project: Project; compact?: boole
           speak: settings.isVoiceReady()
             ? (text) => synthesize(settings.voiceConfig(), text, controller.signal)
             : undefined,
+          makeCaptions:
+            settings.isSttReady() && project.source
+              ? () =>
+                  transcribe(settings.sttConfig(), project.source!.uri, {
+                    durationMs: project.source!.durationMs,
+                    onProgress: (progress) =>
+                      setStatus(`Nutq o‘qilmoqda ${Math.round(progress.progress * 100)}%`),
+                    signal: controller.signal,
+                  })
+              : undefined,
           voiceLabel: settings.voiceLabel(),
           signal: controller.signal,
         },
@@ -226,13 +284,24 @@ export function AiChat({ project, compact }: { project: Project; compact?: boole
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder="Masalan: 30 soniyaga sig‘dir, subtitrni sariq qil"
+          placeholder={listening ? 'Gapiring…' : 'Masalan: 30 soniyaga sig‘dir, subtitrni sariq qil'}
           placeholderTextColor={colors.textFaint}
           multiline
           editable={!busy}
           onSubmitEditing={() => send(input)}
           returnKeyType="send"
         />
+        <Pressable
+          onPress={toggleDictation}
+          disabled={busy}
+          style={[styles.mic, listening && styles.micActive]}
+        >
+          <Ionicons
+            name={listening ? 'stop' : 'mic-outline'}
+            size={18}
+            color={listening ? '#fff' : colors.textDim}
+          />
+        </Pressable>
         <Pressable
           onPress={() => send(input)}
           disabled={busy || !input.trim()}
@@ -354,6 +423,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     ...typography.small,
   },
+  mic: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micActive: { backgroundColor: colors.red, borderColor: colors.red },
+
   send: {
     width: 44,
     height: 44,

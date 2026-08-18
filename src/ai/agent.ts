@@ -175,6 +175,8 @@ function toolLabel(call: ToolCall): string {
       return 'Nutqni o‘qiyapti';
     case 'read_project':
       return 'Loyihani ko‘ryapti';
+    case 'make_captions':
+      return 'Nutqni matnga aylantiryapti';
     case 'keep_ranges':
       return 'Montajni qayta yig‘yapti';
     case 'remove_range':

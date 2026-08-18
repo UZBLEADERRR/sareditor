@@ -15,7 +15,10 @@ Tashqariga faqat siz ulagan AI provayderiga nutq transkripsiyasi va montaj rejas
   joylashuvi, tarjima, rasm chizish, sizning rasm/videolaringizni joylashtirish, ovoz berish,
   ovoz miksi va format
 - Har bir buyruqdan keyin nima o‘zgargani ro‘yxat bo‘lib chiqadi
+- Subtitr yo‘q bo‘lsa, agent o‘zi nutqni matnga aylantiradi — alohida tugma bosish shart emas
+- **Mikrofon** — buyruqni yozib o‘tirmay aytsangiz ham bo‘ladi; aytganingiz matn maydoniga tushadi
 - **“AI qilganini bekor qil”** — bitta tugma bilan loyiha o‘sha buyruqdan oldingi holatiga qaytadi
+  (“Bir tugmada montaj” ham shu tarixga tushadi)
 - Gemini, Claude, GPT yoki OpenAI-mos har qanday server bilan ishlaydi
 
 **Mening rasm va videolarim**

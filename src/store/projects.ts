@@ -262,6 +262,7 @@ function snapshot(project: Project): AiSnapshot {
     overlays: project.overlays,
     voiceovers: project.voiceovers,
     transcript: project.transcript,
+    aiPlan: project.aiPlan,
   };
 }
 

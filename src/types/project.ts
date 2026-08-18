@@ -275,6 +275,7 @@ export type AiSnapshot = {
   overlays: ImageOverlay[];
   voiceovers: VoiceClip[];
   transcript?: Transcript;
+  aiPlan?: AiPlan;
 };
 
 /**

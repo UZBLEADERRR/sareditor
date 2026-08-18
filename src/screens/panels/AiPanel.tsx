@@ -19,7 +19,7 @@ import { formatDuration, formatTimecode } from '../../utils/format';
 import { toFileUri } from '../../utils/paths';
 
 export function AiPanel({ project }: { project: Project }) {
-  const patchProject = useProjects((state) => state.patch);
+  const applyAiEdit = useProjects((state) => state.applyAiEdit);
   const setAiPlan = useProjects((state) => state.setAiPlan);
   const removeOverlay = useProjects((state) => state.removeOverlay);
   const removeVoiceover = useProjects((state) => state.removeVoiceover);
@@ -59,8 +59,6 @@ export function AiPanel({ project }: { project: Project }) {
         onProgress: setProgress,
       });
 
-      patchProject(project.id, result.patch);
-
       const lines = [
         `${result.patch.segments?.length ?? 0} ta bo‘lak qoldirildi`,
         `Rang: ${GRADES[result.plan.suggestedGrade].label}`,
@@ -71,6 +69,13 @@ export function AiPanel({ project }: { project: Project }) {
       if (settings.autoImages && !settings.isImageReady()) {
         lines.push('Rasm modeli tanlanmagani uchun rasmlar qo‘shilmadi');
       }
+
+      // Recorded the same way a chat command is, so one button takes it back.
+      applyAiEdit(project.id, result.patch, {
+        instruction: instructions.trim() || 'Bir tugmada to‘liq montaj',
+        summary: result.plan.notes || 'Avto-montaj bajarildi',
+        changes: lines,
+      });
 
       Alert.alert('Tayyor', [...lines, ...result.notes].join('\n'));
     } catch (error) {
