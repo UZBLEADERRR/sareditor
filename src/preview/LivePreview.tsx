@@ -1,20 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
   Canvas,
-  ColorMatrix,
-  Fill,
   Group,
   Image as SkiaImage,
-  Paint,
   RadialGradient,
   Rect,
   Skia,
   Text as SkiaText,
   useImage,
-  useVideo,
   vec,
   type SkFont,
 } from '@shopify/react-native-skia';
+import { useEventListener } from 'expo';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -25,7 +23,6 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useSharedValue } from 'react-native-reanimated';
 
 import { needsProxy } from '../ffmpeg/proxy';
 import { buildTimeline, outputToSource, sourceToOutput } from '../ffmpeg/timeline';
@@ -37,6 +34,7 @@ import { clamp, formatTimecode } from '../utils/format';
 import { toFileUri } from '../utils/paths';
 import { layoutCaption } from './captionLayout';
 import { gradeColorMatrix } from './colorMatrix';
+import { gradeOverlay, rgba } from './gradeOverlay';
 import { gainFromDb, useMixPlayback } from './useMixPlayback';
 import {
   buildCues,
@@ -109,20 +107,6 @@ export function LivePreview({
     [project.segments, project.effects.transition, project.effects.transitionMs]
   );
 
-  const paused = useSharedValue(!playing);
-  const seek = useSharedValue<number | null>(null);
-  const volume = useSharedValue(1);
-
-  React.useEffect(() => {
-    paused.value = !playing;
-  }, [playing, paused]);
-
-  // The mix is live too: muting the original, changing the music level or
-  // adding a voice line is audible immediately, without a render.
-  React.useEffect(() => {
-    volume.value = project.audio.muteOriginal ? 0 : gainFromDb(project.audio.originalVolumeDb);
-  }, [project.audio.muteOriginal, project.audio.originalVolumeDb, volume]);
-
   useMixPlayback({ project, playing, outputMs });
 
   // Always the proxy when one exists: the original may be 4K HEVC, which is
@@ -136,21 +120,38 @@ export function LivePreview({
       : (source.previewUri ?? (needsProxy(source) ? null : source.uri))
     : null;
 
-  // The frame decoder runs on MediaCodec under the hood, which is the single
-  // most likely place for the process to go down without an exception. Fence it
-  // so a crash log says whether the decoder was ever handed the file.
   React.useEffect(() => {
     if (!playbackUri) return undefined;
-    trace(`skia video open ${playbackUri.split('/').pop()}`);
-    return () => trace('skia video close');
+    trace(`player open ${playbackUri.split('/').pop()}`);
+    return () => trace('player close');
   }, [playbackUri]);
 
-  const video = useVideo(playbackUri ? toFileUri(playbackUri) : null, {
-    paused,
-    seek,
-    looping: false,
-    volume,
+  // Playback runs through ExoPlayer rather than a frame decoder feeding the
+  // canvas. Driving MediaCodec ourselves and handing each frame to the GPU is
+  // what took the process down on real hardware; a platform video view is the
+  // one path that is guaranteed to survive whatever the phone's camera wrote.
+  const player = useVideoPlayer(playbackUri ? toFileUri(playbackUri) : null, (instance) => {
+    instance.loop = false;
+    instance.timeUpdateEventInterval = TICK_MS / 1000;
   });
+
+  const [currentSourceMs, setCurrentSourceMs] = React.useState(0);
+  useEventListener(player, 'timeUpdate', ({ currentTime }) =>
+    setCurrentSourceMs(currentTime * 1000)
+  );
+
+  React.useEffect(() => {
+    if (playing) player.play();
+    else player.pause();
+  }, [playing, player]);
+
+  // The mix is live too: muting the original, changing the music level or
+  // adding a voice line is audible immediately, without a render.
+  React.useEffect(() => {
+    player.volume = project.audio.muteOriginal
+      ? 0
+      : gainFromDb(project.audio.originalVolumeDb);
+  }, [project.audio.muteOriginal, project.audio.originalVolumeDb, player]);
 
   const [box, setBox] = React.useState({ width: 0, height: 0 });
   const [selected, setSelected] = React.useState<DragTarget>(null);
@@ -163,34 +164,30 @@ export function LivePreview({
 
   React.useEffect(() => {
     if (!playing || !source) return;
-    const id = setInterval(() => {
-      const sourceMs = video.currentTime.value * 1000;
-      const mapped = sourceToOutput(timeline, sourceMs);
+    const mapped = sourceToOutput(timeline, currentSourceMs);
 
-      if (mapped === null) {
-        // Outside every kept range: hop to whichever segment comes next.
-        const next = timeline.placed.find((item) => item.segment.startMs > sourceMs);
-        if (next) {
-          seek.value = next.segment.startMs / 1000;
-        } else {
-          onPlayingChange(false);
-          onSeek(timeline.totalMs);
-        }
-        return;
+    if (mapped === null) {
+      // Outside every kept range: hop to whichever segment comes next.
+      const next = timeline.placed.find((item) => item.segment.startMs > currentSourceMs);
+      if (next) {
+        player.currentTime = next.segment.startMs / 1000;
+      } else {
+        onPlayingChange(false);
+        onSeek(timeline.totalMs);
       }
-      onSeek(mapped);
-    }, TICK_MS);
-    return () => clearInterval(id);
-  }, [playing, source, timeline, video.currentTime, seek, onSeek, onPlayingChange]);
+      return;
+    }
+    onSeek(mapped);
+  }, [playing, source, timeline, currentSourceMs, player, onSeek, onPlayingChange]);
 
   /** Moves the file's head to wherever the export timeline says we are. */
   const seekTo = React.useCallback(
     (ms: number) => {
       const target = outputToSource(timeline, clamp(ms, 0, timeline.totalMs));
-      if (target) seek.value = target.sourceMs / 1000;
+      if (target) player.currentTime = target.sourceMs / 1000;
       onSeek(clamp(ms, 0, timeline.totalMs));
     },
-    [timeline, seek, onSeek]
+    [timeline, player, onSeek]
   );
 
   const seekToRef = React.useRef(seekTo);
@@ -213,8 +210,8 @@ export function LivePreview({
   }, [box, config.aspect]);
 
   const effects = project.effects;
-  const colorMatrix = React.useMemo(
-    () => gradeColorMatrix(effects.grade, effects.gradeStrength),
+  const grade = React.useMemo(
+    () => gradeOverlay(gradeColorMatrix(effects.grade, effects.gradeStrength)),
     [effects.grade, effects.gradeStrength]
   );
 
@@ -229,15 +226,8 @@ export function LivePreview({
   const barHeight = letterboxBarHeight(effects.letterbox, frame.height);
 
   const videoRect = React.useMemo(
-    () =>
-      fitRect(
-        video.size.width || source?.width || 1,
-        video.size.height || source?.height || 1,
-        frame.width,
-        frame.height,
-        effects.fillMode
-      ),
-    [video.size, source, frame.width, frame.height, effects.fillMode]
+    () => fitRect(source?.width || 1, source?.height || 1, frame.width, frame.height, effects.fillMode),
+    [source, frame.width, frame.height, effects.fillMode]
   );
 
   // ------------------------------------------------------------ captions ---
@@ -303,40 +293,87 @@ export function LivePreview({
     >
       <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill}>
-          <Canvas style={StyleSheet.absoluteFill}>
-            <Fill color="#000000" />
+          {/*
+            The picture is a platform video view sitting under the canvas, sized
+            and zoomed to the same rectangle the exporter will use. Everything
+            drawn afterwards is overlay, so the canvas above it stays
+            transparent.
+          */}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.stage,
+              {
+                left: frame.x,
+                top: frame.y,
+                width: frame.width,
+                height: frame.height,
+                opacity: fade,
+              },
+            ]}
+          >
+            {playbackUri ? (
+              <VideoView
+                player={player}
+                nativeControls={false}
+                contentFit="fill"
+                // A SurfaceView is punched through the window and composited
+                // underneath it, which would put the video behind the canvas
+                // drawing the captions. A texture view is an ordinary view and
+                // layers the way the rest of the tree expects.
+                surfaceType="textureView"
+                useExoShutter={false}
+                style={{
+                  position: 'absolute',
+                  left: videoRect.x,
+                  top: videoRect.y,
+                  width: videoRect.width,
+                  height: videoRect.height,
+                  transform: [{ scale: zoom }],
+                }}
+              />
+            ) : null}
+          </View>
 
+          <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
             <Group
               transform={[{ translateX: frame.x }, { translateY: frame.y }]}
               clip={{ x: 0, y: 0, width: frame.width, height: frame.height }}
               opacity={fade}
             >
-              {/* Video, graded and zoomed exactly as the exporter will. */}
-              <Group
-                transform={[
-                  { translateX: frame.width / 2 },
-                  { translateY: frame.height / 2 },
-                  { scale: zoom },
-                  { translateX: -frame.width / 2 },
-                  { translateY: -frame.height / 2 },
-                ]}
-                layer={
-                  colorMatrix ? (
-                    <Paint>
-                      <ColorMatrix matrix={colorMatrix} />
-                    </Paint>
-                  ) : undefined
-                }
-              >
-                <SkiaImage
-                  image={video.currentFrame}
-                  x={videoRect.x}
-                  y={videoRect.y}
-                  width={videoRect.width}
-                  height={videoRect.height}
-                  fit="fill"
-                />
-              </Group>
+              {/*
+                The grade, painted on rather than applied to the pixels — see
+                gradeOverlay for what that can and cannot reproduce.
+              */}
+              {grade ? (
+                <Group>
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={frame.width}
+                    height={frame.height}
+                    color={rgba(grade.multiply)}
+                    blendMode="multiply"
+                  />
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={frame.width}
+                    height={frame.height}
+                    color={rgba(grade.add)}
+                    blendMode="plus"
+                  />
+                  {grade.wash > 0.02 ? (
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={frame.width}
+                      height={frame.height}
+                      color={rgba([0.5, 0.5, 0.5], grade.wash)}
+                    />
+                  ) : null}
+                </Group>
+              ) : null}
 
               {effects.vignette > 0.02 ? (
                 <Rect
@@ -588,6 +625,8 @@ function useCaptionFont(family: string, size: number): SkFont | null {
 }
 
 const styles = StyleSheet.create({
+  /** The safe frame: black, clipped, and exactly the export aspect. */
+  stage: { position: 'absolute', overflow: 'hidden', backgroundColor: '#000000' },
   wrapper: {
     width: '100%',
     aspectRatio: 16 / 11,

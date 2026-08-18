@@ -90,49 +90,63 @@ export function EditorScreen() {
   // throw away the cut, the transcript or anything else already done.
   const patchProject = useProjects((state) => state.patch);
 
+  const sourceId = source?.id;
+  const previewUri = source?.previewUri;
+  const durationMs = source?.durationMs ?? 0;
+
   // The preview and the film strip both read the proxy, never the original.
   // Building it before either one touches the file is the whole point: a 4K
-  // clip handed to the frame decoder can bring the process down.
+  // clip handed to a decoder is the input most likely to bring the process
+  // down. Keyed on the source id rather than the source object, because
+  // recording the proxy path rewrites that object and would otherwise start
+  // the work again on top of itself.
   React.useEffect(() => {
-    if (!source || !projectId) return undefined;
+    if (!source || !projectId || !sourceId || previewUri) return undefined;
     let cancelled = false;
-    trace(`editor mount ${source.width}x${source.height} proxy=${source.previewUri ? 'yes' : 'no'}`);
+    trace(`proxy needed ${source.width}x${source.height}`);
+    setPreparing(true);
 
     (async () => {
-      let playbackUri = source.previewUri;
-
-      if (!playbackUri) {
-        setPreparing(true);
-        try {
-          playbackUri = await buildPreviewProxy(source);
-        } catch {
-          // A proxy that could not be built must not leave the editor with
-          // nothing to play; fall back to the original and record that, so the
-          // preview stops waiting for a file that is never coming.
-          playbackUri = source.uri;
-        } finally {
-          if (!cancelled) {
-            // Recorded even when it is the original, so the decision survives a
-            // remount and the preview knows the wait is over either way.
-            patchProject(projectId, {
-              source: { ...source, previewUri: playbackUri ?? source.uri },
-            });
-            setPreparing(false);
-          }
-        }
+      let resolved: string;
+      try {
+        resolved = await buildPreviewProxy(source);
+      } catch {
+        // A proxy that could not be built must not leave the editor with
+        // nothing to play; fall back to the original and record that, so the
+        // preview stops waiting for a file that is never coming.
+        resolved = source.uri;
       }
-
       if (cancelled) return;
-      const step = source.durationMs / (THUMBNAIL_COUNT + 1);
+      // Recorded even when it is the original, so the decision survives a
+      // remount and the preview knows the wait is over either way.
+      patchProject(projectId, { source: { ...source, previewUri: resolved } });
+      setPreparing(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, sourceId, previewUri]);
+
+  // The strip follows whatever the preview ended up playing, and only once it
+  // has settled — extracting two dozen frames while the transcode is still
+  // running is a lot of decoder pressure for pictures nobody can see yet.
+  React.useEffect(() => {
+    if (!previewUri || !durationMs) return undefined;
+    let cancelled = false;
+
+    (async () => {
+      const step = durationMs / (THUMBNAIL_COUNT + 1);
       const times = Array.from({ length: THUMBNAIL_COUNT }, (_, index) => step * (index + 1));
-      const result = await generateThumbnails(playbackUri ?? source.uri, times);
+      const result = await generateThumbnails(previewUri, times);
       if (!cancelled) setThumbnails(result);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [source, projectId, patchProject]);
+  }, [previewUri, durationMs]);
 
   if (!project) {
     return (

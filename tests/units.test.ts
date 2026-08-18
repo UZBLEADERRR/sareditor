@@ -16,6 +16,7 @@ import {
 } from '../src/preview/frame';
 import { outputToSource } from '../src/ffmpeg/timeline';
 import { gradeColorMatrix } from '../src/preview/colorMatrix';
+import { gradeOverlay, rgba } from '../src/preview/gradeOverlay';
 import type { ImageOverlay } from '../src/types/project';
 import { Runner } from './helpers';
 import { TRANSCRIPT, baseProject } from './scenarios';
@@ -244,6 +245,35 @@ export function runPreviewTests(runner: Runner): void {
     'monochrome collapses the channels onto luma',
     Boolean(mono && Math.abs(mono[0] - mono[1]) < 0.9 && mono[0] > 0 && mono[1] > 0),
     mono ? mono.slice(0, 3).join(', ') : 'null'
+  );
+
+  // The picture is a platform video view now, so the grade has to be painted
+  // over it rather than applied to it.
+  runner.check('a neutral grade needs no overlay', gradeOverlay(null) === null);
+
+  const warm = gradeOverlay(gradeColorMatrix('teal_orange', 1));
+  runner.check(
+    'every overlay channel stays paintable',
+    Boolean(
+      warm &&
+        [...warm.multiply, ...warm.add].every((value) => value >= 0 && value <= 1) &&
+        warm.wash >= 0 &&
+        warm.wash <= 0.75
+    ),
+    warm ? `${warm.multiply.join(',')} + ${warm.add.join(',')} wash ${warm.wash}` : 'null'
+  );
+
+  const monoOverlay = gradeOverlay(gradeColorMatrix('bw', 1));
+  const tealOverlay = gradeOverlay(gradeColorMatrix('teal_orange', 1));
+  runner.check(
+    'losing colour reads as a heavier veil than a tint does',
+    Boolean(monoOverlay && tealOverlay && monoOverlay.wash > tealOverlay.wash),
+    `${monoOverlay?.wash} vs ${tealOverlay?.wash}`
+  );
+  runner.check(
+    'overlay colours come out as rgba Skia accepts',
+    rgba([1, 0.5, 0], 0.5) === 'rgba(255, 128, 0, 0.5)',
+    rgba([1, 0.5, 0], 0.5)
   );
 
   runner.section('Preview clock');
