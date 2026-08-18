@@ -13,8 +13,20 @@ type Geometry = { scale: string; x: string; y: string };
  * live in the lower two thirds, and an illustration that covers the words it is
  * illustrating defeats the point.
  */
-function geometryFor(style: ImageOverlay['style'], width: number, height: number): Geometry {
-  switch (style) {
+function geometryFor(overlay: ImageOverlay, width: number, height: number): Geometry {
+  // Hand placement from the preview wins over the style's default position.
+  if (overlay.xPct !== undefined && overlay.yPct !== undefined) {
+    const overlayWidth = even(Math.round((width * (overlay.widthPct ?? 60)) / 100));
+    return {
+      scale: overlay.style === 'fullscreen'
+        ? `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`
+        : `scale=${overlayWidth}:-2`,
+      x: `${Math.round((width * overlay.xPct) / 100)}-w/2`,
+      y: `${Math.round((height * overlay.yPct) / 100)}-h/2`,
+    };
+  }
+
+  switch (overlay.style) {
     case 'fullscreen':
       return {
         scale: `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`,
@@ -70,7 +82,7 @@ export function overlayStage(options: {
     if (endMs <= startMs) return;
 
     const inputIndex = options.firstInputIndex + index;
-    const geometry = geometryFor(overlay.style, options.width, options.height);
+    const geometry = geometryFor(overlay, options.width, options.height);
     const start = toFfmpegSeconds(startMs);
     const end = toFfmpegSeconds(endMs);
     const fade = round(Math.min(FADE_MS, (endMs - startMs) / 3) / 1000, 3);

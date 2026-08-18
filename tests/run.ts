@@ -1,11 +1,12 @@
 import { Runner } from './helpers';
 import { runAnalysisTests } from './analysis.test';
 import { runRenderTests } from './render.test';
-import { runUnitTests } from './units.test';
+import { runPreviewTests, runUnitTests } from './units.test';
 
 const runner = new Runner();
 
 runUnitTests(runner);
+runPreviewTests(runner);
 runAnalysisTests(runner);
 runRenderTests(runner);
 

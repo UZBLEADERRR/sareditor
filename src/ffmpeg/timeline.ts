@@ -83,6 +83,30 @@ export function mapWordsToTimeline(timeline: Timeline, words: Word[]): Word[] {
   return mapped.sort((a, b) => a.startMs - b.startMs);
 }
 
+/**
+ * Inverse of `sourceToOutput`: where in the original file the playhead sits.
+ *
+ * The live preview needs this on every frame — it plays the untouched source
+ * file but has to present the cut, so it maps its own clock back to a real
+ * position and seeks when the answer jumps.
+ */
+export function outputToSource(
+  timeline: Timeline,
+  outputMs: number
+): { sourceMs: number; segmentIndex: number } | null {
+  for (let index = 0; index < timeline.placed.length; index += 1) {
+    const item = timeline.placed[index];
+    if (outputMs >= item.outStartMs && outputMs <= item.outEndMs) {
+      const speed = item.segment.speed > 0 ? item.segment.speed : 1;
+      return {
+        sourceMs: item.segment.startMs + (outputMs - item.outStartMs) * speed,
+        segmentIndex: index,
+      };
+    }
+  }
+  return null;
+}
+
 /** Beats live in music-file time; the mix starts at `musicStartMs`. */
 export function mapBeatsToTimeline(beats: number[], musicStartMs: number, totalMs: number): number[] {
   return beats

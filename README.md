@@ -1,4 +1,4 @@
-# SAR Editor
+# Fara Editor
 
 Instagram Reels, TikTok va YouTube Shorts uchun **telefonning o‘zida** ishlaydigan AI video muharrir.
 Video hech qayerga yuklanmaydi — butun montaj, subtitr va render Android qurilmasi ichida bajariladi.
@@ -21,6 +21,15 @@ Tashqariga faqat siz ulagan AI provayderiga nutq transkripsiyasi va montaj rejas
 - Animatsiyalar: sakrash, kuchli sakrash, pastdan chiqish, yumshoq, mashinka
 - Shrift, hajm, balandlik, kontur, soya, ranglar — hammasi sozlanadi
 - Boshqa tilga tarjima (vaqtlar saqlanadi) va `.srt` eksport
+
+**Jonli ko‘rish**
+- Musiqa, subtitr va effektlarni o‘zgartirsangiz — **darrov ekranda ko‘rinadi**, render kutilmaydi
+- Subtitr va rasmlarni **barmoq bilan surib** joylashtirasiz
+- To‘liq ekran rejimi
+
+Preview GPU’da (Skia) chiziladi: kadr kesimi, zoom, vinyet, chiziqlar, subtitr va rasmlar
+render bilan bir xil hisob-kitobdan foydalanadi. Faqat rang gradatsiyasi matritsa bilan
+taqriblanadi — “Namuna ko‘rish” tugmasi esa haqiqiy render orqali aniq natijani beradi.
 
 **Kino effektlari**
 - Rang: Teal & Orange, Iliq plyonka, Sovuq kino, Yorqin, Qorong‘i, Vintaj, Oq-qora — kuchi sozlanadi
@@ -191,6 +200,19 @@ qo‘llanadi. Shuning uchun “Namuna ko‘rish” tugmasi aynan shu quvurdan 4 
 render qiladi. Yolg‘on gapiradigan preview umuman preview yo‘qligidan yomonroq.
 
 ---
+
+## Nom va logotip
+
+Ilova ichidagi nom, tagline va logotip **Sozlamalar → Ilova nomi va logotipi** bo‘limidan
+o‘zgartiriladi — qayta yig‘ish shart emas.
+
+Telefon ekranidagi ikonka va o‘rnatish nomi build vaqtida olinadi:
+
+- ikonka: `assets/icon.png` (1024×1024) va `assets/android-icon-foreground.png`
+- o‘rnatish nomi: `app.json` → `expo.name`
+
+O‘z rasmingizni ikonka qilish uchun shu fayllarni almashtirib push qiling — CI yangi APK yig‘adi.
+Hozirgi ikonka vaqtinchalik: uslubi mos, lekin uni o‘z rasmingiz bilan almashtirish tavsiya etiladi.
 
 ## Litsenziya
 

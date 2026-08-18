@@ -22,6 +22,16 @@ type GradeSpec = {
   monochrome?: boolean;
 };
 
+export type ResolvedGrade = {
+  eq: EqParams;
+  balance: BalanceParams;
+  /** Kelvin; 6500 means no shift. */
+  temperature: number;
+  temperatureMix: number;
+  monochrome: number;
+  curvesPreset: string | null;
+};
+
 const NEUTRAL_EQ: EqParams = { contrast: 1, brightness: 0, saturation: 1, gamma: 1 };
 const NEUTRAL_BALANCE: BalanceParams = {
   rs: 0, gs: 0, bs: 0,
@@ -129,6 +139,49 @@ function temperatureFilter(spec: GradeSpec, strength: number): string | null {
   const mix = round(strength, 3);
   if (mix < 0.02) return null;
   return `colortemperature=temperature=${spec.temperature}:mix=${mix}:pl=0.4`;
+}
+
+/**
+ * Resolves a grade to plain numbers.
+ *
+ * Both the renderer and the live preview read this, so the slider means the
+ * same thing in both places even though one builds an ffmpeg filter chain and
+ * the other builds a GPU colour matrix.
+ */
+export function resolveGrade(grade: GradeId, strength: number): ResolvedGrade {
+  const spec = GRADES[grade];
+  const clamped = Math.min(1, Math.max(0, strength));
+
+  if (!spec || grade === 'none' || clamped <= 0.01) {
+    return {
+      eq: { ...NEUTRAL_EQ },
+      balance: { ...NEUTRAL_BALANCE },
+      temperature: 6500,
+      temperatureMix: 0,
+      monochrome: 0,
+      curvesPreset: null,
+    };
+  }
+
+  const targetEq: EqParams = { ...NEUTRAL_EQ, ...spec.eq };
+  const targetBalance: BalanceParams = { ...NEUTRAL_BALANCE, ...spec.balance };
+
+  return {
+    eq: {
+      contrast: round(lerp(1, targetEq.contrast, clamped), 4),
+      brightness: round(lerp(0, targetEq.brightness, clamped), 4),
+      saturation: round(lerp(1, targetEq.saturation, clamped), 4),
+      gamma: round(lerp(1, targetEq.gamma, clamped), 4),
+    },
+    balance: (Object.keys(NEUTRAL_BALANCE) as (keyof BalanceParams)[]).reduce((acc, key) => {
+      acc[key] = round(lerp(0, targetBalance[key], clamped), 4);
+      return acc;
+    }, {} as BalanceParams),
+    temperature: spec.temperature ?? 6500,
+    temperatureMix: spec.temperature ? round(clamped, 3) : 0,
+    monochrome: spec.monochrome ? clamped : 0,
+    curvesPreset: spec.curves && clamped >= spec.curves.minStrength ? spec.curves.preset : null,
+  };
 }
 
 /** Builds the colour half of the look for a given grade + strength. */

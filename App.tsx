@@ -6,8 +6,10 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useBrand } from './src/brand';
 import { registerFonts } from './src/ffmpeg/engine';
 import type { RootStackParamList } from './src/navigation';
 import { EditorScreen } from './src/screens/EditorScreen';
@@ -37,6 +39,7 @@ export default function App() {
   const [ready, setReady] = React.useState(false);
   const hydrateProjects = useProjects((state) => state.hydrate);
   const hydrateSettings = useSettings((state) => state.hydrate);
+  const hydrateBrand = useBrand((state) => state.hydrate);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -51,7 +54,7 @@ export default function App() {
         }
       }
 
-      await Promise.all([hydrateProjects(), hydrateSettings()]);
+      await Promise.all([hydrateProjects(), hydrateSettings(), hydrateBrand()]);
 
       // libass needs its font directories before the first caption render; doing
       // it at boot means the first export is not the one that pays for it.
@@ -66,30 +69,33 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [hydrateProjects, hydrateSettings]);
+  }, [hydrateProjects, hydrateSettings, hydrateBrand]);
 
   if (!ready) return <View style={styles.boot} />;
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <NavigationContainer theme={navigationTheme}>
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.bg },
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Editor" component={EditorScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <NavigationContainer theme={navigationTheme}>
+          <Stack.Navigator
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.bg },
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Editor" component={EditorScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
   boot: { flex: 1, backgroundColor: colors.bg },
 });

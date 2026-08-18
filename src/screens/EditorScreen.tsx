@@ -7,10 +7,10 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Timeline } from '../components/Timeline';
-import { VideoPreview, type VideoPreviewHandle } from '../components/VideoPreview';
 import { IconButton } from '../components/ui';
 import { PLATFORM_PRESETS } from '../ffmpeg/presets';
-import { buildTimeline, sourceToOutput } from '../ffmpeg/timeline';
+import { buildTimeline, outputToSource, sourceToOutput } from '../ffmpeg/timeline';
+import { LivePreview } from '../preview/LivePreview';
 import type { RootStackParamList } from '../navigation';
 import { generateThumbnails } from '../services/media';
 import { useProjects } from '../store/projects';
@@ -50,12 +50,17 @@ export function EditorScreen() {
   const project = useProjects((state) => state.projects.find((item) => item.id === projectId));
   const setSegments = useProjects((state) => state.setSegments);
 
+  const updateSubtitle = useProjects((state) => state.updateSubtitle);
+  const updateOverlay = useProjects((state) => state.updateOverlay);
+
   const [tab, setTab] = React.useState<TabId>('trim');
   const [selectedSegmentId, setSelectedSegmentId] = React.useState<string | null>(null);
+  // The playhead lives on the *export* timeline; the preview and every panel
+  // speak that clock, and only the strip converts back to source time.
   const [playheadMs, setPlayheadMs] = React.useState(0);
+  const [playing, setPlaying] = React.useState(false);
+  const [fullscreen, setFullscreen] = React.useState(false);
   const [thumbnails, setThumbnails] = React.useState<(string | null)[]>([]);
-
-  const previewRef = React.useRef<VideoPreviewHandle>(null);
 
   React.useEffect(() => {
     if (!project?.source) return;
@@ -87,21 +92,25 @@ export function EditorScreen() {
   );
   const selected = project.segments.find((segment) => segment.id === selectedSegmentId);
 
-  const seek = (ms: number) => {
-    setPlayheadMs(ms);
-    previewRef.current?.seekTo(ms);
+  /** Panels and the strip seek in source time; the preview wants export time. */
+  const seekSource = (sourceMs: number) => {
+    const mapped = sourceToOutput(timeline, sourceMs);
+    setPlayheadMs(mapped ?? playheadMs);
   };
+  const seek = seekSource;
+
+  const sourcePlayhead = outputToSource(timeline, playheadMs)?.sourceMs ?? 0;
 
   /** Splits the segment under the playhead into two, which is the core cut gesture. */
   const splitAtPlayhead = () => {
     const target = project.segments.find(
-      (segment) => playheadMs > segment.startMs + 200 && playheadMs < segment.endMs - 200
+      (segment) => sourcePlayhead > segment.startMs + 200 && sourcePlayhead < segment.endMs - 200
     );
     if (!target) {
       Alert.alert('Kesib bo‘lmadi', 'Kursorni bo‘lak ichiga, chetlaridan uzoqroqqa qo‘ying.');
       return;
     }
-    const cut = Math.round(playheadMs);
+    const cut = Math.round(sourcePlayhead);
     const next: Segment[] = [];
     for (const segment of project.segments) {
       if (segment.id !== target.id) {
@@ -134,8 +143,40 @@ export function EditorScreen() {
     );
   };
 
-  const bounds = selected ? { startMs: selected.startMs, endMs: selected.endMs } : undefined;
-  const outputPosition = sourceToOutput(timeline, playheadMs);
+
+  if (fullscreen) {
+    return (
+      <View style={styles.fullscreen}>
+        <LivePreview
+          project={project}
+          playing={playing}
+          onPlayingChange={setPlaying}
+          outputMs={playheadMs}
+          onSeek={setPlayheadMs}
+          fullscreen
+          onToggleFullscreen={() => setFullscreen(false)}
+          onMoveCaption={({ xPct, yPct }) =>
+            updateSubtitle(project.id, {
+              positionXPct: Math.round(xPct),
+              positionPct: Math.round(yPct),
+            })
+          }
+          onMoveOverlay={(overlayId, { xPct, yPct }) =>
+            updateOverlay(project.id, overlayId, {
+              xPct: Math.round(xPct),
+              yPct: Math.round(yPct),
+            })
+          }
+        />
+        <Pressable
+          onPress={() => setFullscreen(false)}
+          style={[styles.fullscreenClose, { top: insets.top + spacing.sm }]}
+        >
+          <Ionicons name="close" size={20} color="#fff" />
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -147,19 +188,31 @@ export function EditorScreen() {
           </Text>
           <Text style={styles.headerSub}>
             {PLATFORM_PRESETS[project.export.platform].label} · {formatDuration(timeline.totalMs)}
-            {outputPosition !== null ? ` · ${formatTimecode(outputPosition)}` : ''}
           </Text>
         </View>
         <IconButton icon="settings-outline" onPress={() => navigation.navigate('Settings')} />
       </View>
 
       <View style={styles.stage}>
-        <VideoPreview
-          ref={previewRef}
-          uri={source?.uri}
-          aspect={project.export.aspect}
-          boundsMs={bounds}
-          onTimeUpdate={setPlayheadMs}
+        <LivePreview
+          project={project}
+          playing={playing}
+          onPlayingChange={setPlaying}
+          outputMs={playheadMs}
+          onSeek={setPlayheadMs}
+          onToggleFullscreen={() => setFullscreen(true)}
+          onMoveCaption={({ xPct, yPct }) =>
+            updateSubtitle(project.id, {
+              positionXPct: Math.round(xPct),
+              positionPct: Math.round(yPct),
+            })
+          }
+          onMoveOverlay={(overlayId, { xPct, yPct }) =>
+            updateOverlay(project.id, overlayId, {
+              xPct: Math.round(xPct),
+              yPct: Math.round(yPct),
+            })
+          }
         />
       </View>
 
@@ -168,7 +221,7 @@ export function EditorScreen() {
           durationMs={source?.durationMs ?? 0}
           segments={project.segments}
           selectedId={selectedSegmentId}
-          playheadMs={playheadMs}
+          playheadMs={sourcePlayhead}
           thumbnails={thumbnails}
           silences={project.analysis?.silences}
           onSelect={setSelectedSegmentId}
@@ -188,7 +241,7 @@ export function EditorScreen() {
           <TransportButton
             icon="play-skip-back-outline"
             label="Boshiga"
-            onPress={() => seek(selected?.startMs ?? 0)}
+            onPress={() => seekSource(selected?.startMs ?? 0)}
           />
           <TransportButton
             icon="scan-outline"
@@ -272,6 +325,17 @@ function TransportButton({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  fullscreen: { flex: 1, backgroundColor: '#000' },
+  fullscreenClose: {
+    position: 'absolute',
+    right: spacing.lg,
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(6,6,10,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   centered: { alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   missing: { ...typography.body, color: colors.textDim },
 

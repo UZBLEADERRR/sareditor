@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useBrand } from '../brand';
 import { Badge, Button, EmptyState, IconButton } from '../components/ui';
 import { PLATFORM_PRESETS } from '../ffmpeg/presets';
 import type { RootStackParamList } from '../navigation';
@@ -24,6 +25,7 @@ import { useSettings } from '../store/settings';
 import { colors, gradients, radius, spacing, typography } from '../theme';
 import type { Project } from '../types/project';
 import { formatDuration, formatBytes } from '../utils/format';
+import { toFileUri } from '../utils/paths';
 import { buildTimeline } from '../ffmpeg/timeline';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -38,6 +40,7 @@ export function HomeScreen() {
   const removeProject = useProjects((state) => state.remove);
   const setActive = useProjects((state) => state.setActive);
 
+  const brand = useBrand();
   const defaultPlatform = useSettings((state) => state.defaultPlatform);
   // Readiness means a key *and* a chosen model, and the speech side may be
   // borrowing the model key when both point at the same provider.
@@ -83,9 +86,14 @@ export function HomeScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.brand}>SAR Editor</Text>
-          <Text style={styles.tagline}>AI montaj · Reels · TikTok · Shorts</Text>
+        <View style={styles.brandRow}>
+          {brand.logoUri ? (
+            <Image source={{ uri: toFileUri(brand.logoUri) }} style={styles.brandLogo} />
+          ) : null}
+          <View>
+            <Text style={styles.brand}>{brand.name}</Text>
+            <Text style={styles.tagline}>{brand.tagline}</Text>
+          </View>
         </View>
         <IconButton icon="settings-outline" onPress={() => navigation.navigate('Settings')} size={22} />
       </View>
@@ -118,7 +126,7 @@ export function HomeScreen() {
           <EmptyState
             icon="film-outline"
             title="Hali loyiha yo‘q"
-            message="Videoni tanlang — dasturning o‘zi jimliklarni kesadi, subtitr yozadi va kino ranglarini qo‘yadi."
+            message="Videoni tanlang — AI o‘zi kesadi, subtitr yozadi, ranglarni qo‘yadi va misollarga rasm chizadi."
           />
         }
         renderItem={({ item }) => (
@@ -237,6 +245,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  brandLogo: { width: 38, height: 38, borderRadius: radius.md },
   brand: { ...typography.display, color: colors.text },
   tagline: { ...typography.tiny, color: colors.textFaint, marginTop: 2 },
 

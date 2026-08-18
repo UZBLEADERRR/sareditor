@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { listImageModels, listLlmModels, listSttModels, type ModelOption } from '../ai/models';
+import { useBrand } from '../brand';
 import { completeText } from '../ai/providers/llm';
 import { LLM_PROVIDERS, STT_PROVIDERS, type LlmProviderId, type SttProviderId } from '../ai/types';
 import { Badge, Button, Card, ChipRow, Divider, Field, Hint, IconButton, SectionTitle, ToggleRow } from '../components/ui';
@@ -12,13 +13,15 @@ import { deviceInfo } from '../ffmpeg/engine';
 import { PLATFORM_ORDER, PLATFORM_PRESETS } from '../ffmpeg/presets';
 import { sttKeyIsShared, useSettings } from '../store/settings';
 import { colors, radius, spacing, typography } from '../theme';
+import { pickLogo } from '../services/media';
 import { formatBytes } from '../utils/format';
-import { clearWorkDir, workDirSizeBytes } from '../utils/paths';
+import { clearWorkDir, toFileUri, workDirSizeBytes } from '../utils/paths';
 
 export function SettingsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const settings = useSettings();
+  const brand = useBrand();
 
   const [testing, setTesting] = React.useState(false);
   const [cacheBytes, setCacheBytes] = React.useState(0);
@@ -221,6 +224,49 @@ export function SettingsScreen() {
           />
         </Card>
 
+        <SectionTitle>Ilova nomi va logotipi</SectionTitle>
+        <Card>
+          <View style={styles.brandRow}>
+            {brand.logoUri ? (
+              <Image source={{ uri: toFileUri(brand.logoUri) }} style={styles.brandLogo} />
+            ) : (
+              <View style={[styles.brandLogo, styles.brandLogoEmpty]}>
+                <Ionicons name="image-outline" size={18} color={colors.textFaint} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Logotipni tanlash"
+                icon="images-outline"
+                variant="secondary"
+                compact
+                onPress={async () => {
+                  try {
+                    const logo = await pickLogo();
+                    if (logo) brand.update({ logoUri: logo.uri });
+                  } catch (error) {
+                    Alert.alert('Logotip qo‘yilmadi', (error as Error).message);
+                  }
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={{ height: spacing.md }} />
+          <Field label="Nomi" value={brand.name} onChangeText={(name) => brand.update({ name })} autoCapitalize="words" />
+          <Field
+            label="Tagline"
+            value={brand.tagline}
+            onChangeText={(tagline) => brand.update({ tagline })}
+            autoCapitalize="sentences"
+          />
+          <Button label="Standart holatga qaytarish" variant="ghost" compact onPress={brand.reset} />
+          <Hint>
+            Bu ilova ichidagi nom va logotip. Telefon ekranidagi ikonka va o‘rnatish nomi
+            assets/ papkasidagi fayllardan yig‘iladi.
+          </Hint>
+        </Card>
+
         <SectionTitle>Standart platforma</SectionTitle>
         <Card>
           <ChipRow
@@ -418,6 +464,9 @@ const styles = StyleSheet.create({
 
   fieldLabel: { ...typography.small, color: colors.textDim },
   lead: { ...typography.small, color: colors.textDim, lineHeight: 19, marginBottom: spacing.md },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  brandLogo: { width: 54, height: 54, borderRadius: radius.md, backgroundColor: colors.bgElevated },
+  brandLogoEmpty: { alignItems: 'center', justifyContent: 'center' },
 
   picker: { marginBottom: spacing.md },
   pickerHeader: {

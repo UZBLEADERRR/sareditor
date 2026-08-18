@@ -123,6 +123,23 @@ export async function pickFont(): Promise<{ uri: string; name: string } | null> 
   return { uri: toNativePath(localUri), name: asset.name ?? 'Shrift' };
 }
 
+/** Lets the user swap the in-app logo for their own artwork. */
+export async function pickLogo(): Promise<{ uri: string; name: string } | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) throw new Error('Galereyaga ruxsat berilmadi.');
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: false,
+    quality: 1,
+  });
+  if (result.canceled || !result.assets?.length) return null;
+
+  const asset = result.assets[0];
+  const localUri = await copyIntoApp(asset.uri, mediaDir(), asset.fileName ?? `logo_${uid()}.png`);
+  return { uri: toNativePath(localUri), name: asset.fileName ?? 'logo' };
+}
+
 export async function pickLut(): Promise<{ uri: string; name: string } | null> {
   const result = await DocumentPicker.getDocumentAsync({
     type: ['*/*'],

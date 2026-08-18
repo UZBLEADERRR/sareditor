@@ -235,7 +235,7 @@ export function buildAss(options: AssOptions): string {
       fittingCharsPerLine(width, fontSize, config.uppercase, marginFraction)
     ),
   };
-  const x = Math.round(width / 2);
+  const x = Math.round((width * clamp(config.positionXPct ?? 50, 4, 96)) / 100);
   const y = Math.round((height * clamp(config.positionPct, 4, 96)) / 100);
 
   const borderStyle = preset.borderStyle ?? 1;

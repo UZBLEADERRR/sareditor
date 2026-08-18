@@ -86,6 +86,8 @@ export type SubtitleConfig = {
   maxCharsPerLine: number;
   /** 0 = top of frame, 100 = bottom. */
   positionPct: number;
+  /** 0 = left edge, 100 = right. Set by dragging the caption in the preview. */
+  positionXPct: number;
   animation: SubtitleAnimation;
   /** Highlight the word currently being spoken. */
   karaoke: boolean;
@@ -204,6 +206,10 @@ export type ImageOverlay = {
   style: OverlayStyle;
   animation: OverlayAnimation;
   opacity: number;
+  /** Manual placement, as a share of the frame. Unset means the style decides. */
+  xPct?: number;
+  yPct?: number;
+  widthPct?: number;
 };
 
 export type AiPlan = {

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "SAR Editor",
-    "slug": "sar-editor",
+    "name": "Fara Editor",
+    "slug": "fara-editor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "sareditor",
+    "scheme": "faraeditor",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#07070A",
     "newArchEnabled": true,
@@ -18,7 +18,7 @@
       "**/*"
     ],
     "android": {
-      "package": "com.sareditor.app",
+      "package": "com.faraeditor.app",
       "versionCode": 1,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
@@ -37,7 +37,7 @@
       ]
     },
     "ios": {
-      "bundleIdentifier": "com.sareditor.app",
+      "bundleIdentifier": "com.faraeditor.app",
       "supportsTablet": false
     },
     "plugins": [

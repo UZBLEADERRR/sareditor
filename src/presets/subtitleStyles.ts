@@ -17,6 +17,8 @@ const base = {
   emphasisColor: '#FF4D8D',
   uppercase: false,
   maxCharsPerLine: 22,
+  /** Horizontal centre by default; dragging in the preview changes it. */
+  positionXPct: 50,
 };
 
 export const SUBTITLE_STYLES: Record<SubtitleStyleId, SubtitleStylePreset> = {
