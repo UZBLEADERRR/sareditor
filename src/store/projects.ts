@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { exportConfigFor } from '../ffmpeg/presets';
 import type {
   AiPlan,
+  ImageOverlay,
   AudioConfig,
   EffectsConfig,
   ExportConfig,
@@ -38,6 +39,9 @@ type ProjectsState = {
   setSegments: (id: string, segments: Segment[]) => void;
   setTranscript: (id: string, transcript: Transcript | undefined) => void;
   setAiPlan: (id: string, plan: AiPlan | undefined) => void;
+  setOverlays: (id: string, overlays: ImageOverlay[]) => void;
+  removeOverlay: (id: string, overlayId: string) => void;
+  updateOverlay: (id: string, overlayId: string, patch: Partial<ImageOverlay>) => void;
   updateSubtitle: (id: string, patch: Partial<SubtitleConfig>) => void;
   updateMusic: (id: string, patch: Partial<MusicConfig>) => void;
   updateEffects: (id: string, patch: Partial<EffectsConfig>) => void;
@@ -111,6 +115,20 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   setTranscript: (id, transcript) => applyPatch(set, get, id, () => ({ transcript })),
 
   setAiPlan: (id, aiPlan) => applyPatch(set, get, id, () => ({ aiPlan })),
+
+  setOverlays: (id, overlays) => applyPatch(set, get, id, () => ({ overlays })),
+
+  removeOverlay: (id, overlayId) =>
+    applyPatch(set, get, id, (project) => ({
+      overlays: project.overlays.filter((overlay) => overlay.id !== overlayId),
+    })),
+
+  updateOverlay: (id, overlayId, patch) =>
+    applyPatch(set, get, id, (project) => ({
+      overlays: project.overlays.map((overlay) =>
+        overlay.id === overlayId ? { ...overlay, ...patch } : overlay
+      ),
+    })),
 
   updateSubtitle: (id, patch) =>
     applyPatch(set, get, id, (project) => ({ subtitle: { ...project.subtitle, ...patch } })),

@@ -1,6 +1,6 @@
 import { GRADES } from '../ffmpeg/filters/grade';
 import { SUBTITLE_STYLES } from '../presets/subtitleStyles';
-import type { AiPlan, GradeId, SubtitleStyleId, Transcript, Word } from '../types/project';
+import type { AiPlan, GradeId, OverlayStyle, SubtitleStyleId, TransitionId, Transcript, Word } from '../types/project';
 import { formatTimecode } from '../utils/format';
 import { extractJson } from './json';
 import { completeText } from './providers/llm';
@@ -8,6 +8,12 @@ import { AiRequestError, type DirectorInput, type DirectorOutput, type LlmConfig
 
 const GRADE_IDS = Object.keys(GRADES) as GradeId[];
 const STYLE_IDS = Object.keys(SUBTITLE_STYLES) as SubtitleStyleId[];
+const TRANSITION_IDS: TransitionId[] = [
+  'none', 'fade', 'dissolve', 'flash', 'slideup', 'slideleft', 'circleopen', 'pixelize', 'wipeleft',
+];
+const OVERLAY_STYLES: OverlayStyle[] = ['cutaway', 'fullscreen', 'corner'];
+/** Enough to illustrate a short video without turning it into a slideshow. */
+const MAX_IMAGE_IDEAS = 10;
 
 const DIRECTOR_SYSTEM = `You are a short-form video editor who cuts Instagram Reels, TikToks and YouTube Shorts.
 
@@ -22,6 +28,21 @@ Rules:
 - Stay within the target duration; going slightly under is better than over.
 - Write the hook, title and description in the same language the speaker uses.
 - Choose emphasis words that carry the meaning — numbers, outcomes, contrasts. Not filler.
+
+Also pick the cut-to-cut transition. Most short-form video wants none — hard cuts keep the pace.
+Choose a transition only when the piece changes subject or location.
+
+Finally, propose illustrations. Whenever the speaker names something concrete the viewer cannot
+see — an example, an object, a place, a comparison, a result — an image can appear on screen
+while they say it. Rules for these:
+- Only for things that are genuinely visual. Never for abstract talk.
+- Anchor each one to the exact moment the phrase is spoken.
+- 1.5 to 3 seconds each, and never overlapping.
+- At most one every eight seconds; a wall of images is worse than none.
+- Write the prompt as a standalone description of a photograph or illustration. No text in the
+  image, no watermarks, no captions.
+- style: "cutaway" for a card over the upper frame, "fullscreen" to replace the shot entirely,
+  "corner" for a small aside.
 
 Reply with JSON only. No prose, no code fences.`;
 
@@ -65,6 +86,8 @@ export async function planEdit(
     emphasisWords: strArray(parsed.emphasisWords).slice(0, 40),
     suggestedGrade: pick(parsed.suggestedGrade, GRADE_IDS, 'teal_orange'),
     suggestedSubtitleStyle: pick(parsed.suggestedSubtitleStyle, STYLE_IDS, 'hormozi'),
+    suggestedTransition: pick(parsed.suggestedTransition, TRANSITION_IDS, 'none'),
+    imageIdeas: sanitiseImageIdeas(parsed.imageIdeas, input.durationMs),
     musicMood: str(parsed.musicMood),
     notes: str(parsed.notes),
     createdAt: Date.now(),
@@ -108,6 +131,16 @@ function buildDirectorPrompt(input: DirectorInput): string {
         emphasisWords: ['word'],
         suggestedGrade: GRADE_IDS.join('|'),
         suggestedSubtitleStyle: STYLE_IDS.join('|'),
+        suggestedTransition: TRANSITION_IDS.join('|'),
+        imageIdeas: [
+          {
+            startMs: 5200,
+            endMs: 7400,
+            phrase: 'the exact words being spoken',
+            prompt: 'what the picture should show',
+            style: OVERLAY_STYLES.join('|'),
+          },
+        ],
         musicMood: 'e.g. driving lo-fi, 90 BPM',
         notes: 'anything the creator should know',
       },
@@ -145,6 +178,40 @@ function sanitiseRanges(value: unknown, durationMs: number): AiPlan['keepRanges'
     merged.push(range);
   }
   return merged;
+}
+
+/**
+ * Illustrations are clamped hard: a model that proposes twenty overlapping
+ * images would bury the video, and one anchored past the end of the clip would
+ * never appear at all.
+ */
+function sanitiseImageIdeas(value: unknown, durationMs: number): AiPlan['imageIdeas'] {
+  if (!Array.isArray(value)) return [];
+
+  const cleaned = value
+    .map((item: any) => ({
+      startMs: Math.max(0, Math.round(Number(item?.startMs ?? 0))),
+      endMs: Math.round(Number(item?.endMs ?? 0)),
+      phrase: str(item?.phrase),
+      prompt: str(item?.prompt),
+      style: pick(item?.style, OVERLAY_STYLES, 'cutaway'),
+    }))
+    .filter((idea) => idea.prompt && Number.isFinite(idea.startMs) && Number.isFinite(idea.endMs))
+    .filter((idea) => idea.startMs < durationMs)
+    .map((idea) => ({
+      ...idea,
+      endMs: Math.min(durationMs, Math.max(idea.endMs, idea.startMs + 1200)),
+    }))
+    .sort((a, b) => a.startMs - b.startMs);
+
+  const kept: AiPlan['imageIdeas'] = [];
+  for (const idea of cleaned) {
+    const previous = kept[kept.length - 1];
+    if (previous && idea.startMs < previous.endMs + 500) continue;
+    kept.push(idea);
+    if (kept.length >= MAX_IMAGE_IDEAS) break;
+  }
+  return kept;
 }
 
 const TRANSLATE_SYSTEM = `You translate video captions.

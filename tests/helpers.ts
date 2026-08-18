@@ -33,7 +33,12 @@ export function ffmpegOrThrow(args: string[]): string {
   return stderr;
 }
 
-export function ensureFixtures(): { source: string; silentVertical: string; music: string } {
+export function ensureFixtures(): {
+  source: string;
+  silentVertical: string;
+  music: string;
+  images: string[];
+} {
   fs.mkdirSync(fixturesDir, { recursive: true });
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -71,7 +76,26 @@ export function ensureFixtures(): { source: string; silentVertical: string; musi
     ]);
   }
 
-  return { source, silentVertical, music };
+  // Stand-ins for AI-generated illustrations: flat colour cards, each a
+  // different size so the overlay geometry has to actually do its scaling.
+  const images = ['illustration_a.png', 'illustration_b.png', 'illustration_c.png'].map(
+    (name, index) => {
+      const file = path.join(fixturesDir, name);
+      if (!fs.existsSync(file)) {
+        const size = [`1024x1024`, `768x1024`, `1024x576`][index];
+        const colour = ['crimson', 'teal', 'goldenrod'][index];
+        ffmpegOrThrow([
+          '-hide_banner', '-loglevel', 'error', '-y',
+          '-f', 'lavfi', '-i', `color=c=${colour}:s=${size}`,
+          '-frames:v', '1',
+          file,
+        ]);
+      }
+      return file;
+    }
+  );
+
+  return { source, silentVertical, music, images };
 }
 
 export type MediaFacts = {

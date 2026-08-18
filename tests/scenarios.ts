@@ -20,6 +20,7 @@ export const SILENT_VERTICAL: SourceClip = {
 };
 
 export const MUSIC = fixtures.music;
+export const IMAGES = fixtures.images;
 
 function evenlySpacedWords(fromMs: number, toMs: number, tokens: string[]): Word[] {
   const step = (toMs - fromMs) / tokens.length;
@@ -76,6 +77,7 @@ export function baseProject(overrides: Partial<Project> = {}): Project {
     },
     // Small frames keep the suite fast; the filter graph is resolution independent.
     export: { ...exportConfigFor('instagram_reels', 'x264'), width: 540, height: 960, videoBitrateKbps: 2500 },
+    overlays: [],
     renders: [],
   };
   return { ...project, ...overrides };
@@ -165,6 +167,39 @@ export function allScenarios(): Scenario[] {
       }),
     },
   ];
+
+  // The overlay graph shifts each image's own clock, fades its alpha and gates
+  // it with `enable`; all three styles have different geometry, so all three
+  // run. The last one deliberately sits under burned-in captions to prove the
+  // ordering keeps text on top.
+  scenarios.push({
+    name: 'image_overlays',
+    project: baseProject({
+      transcript: TRANSCRIPT,
+      segments: [{ id: 's1', startMs: 0, endMs: 9000, speed: 1 }],
+      subtitle: {
+        ...SUBTITLE_STYLES.hormozi.config,
+        enabled: true,
+        language: 'uz',
+        emphasisWords: [],
+        fontFamily: 'DejaVu Sans',
+      },
+      overlays: [
+        {
+          id: 'o1', uri: IMAGES[0], startMs: 800, endMs: 2600,
+          phrase: 'birinchi misol', prompt: 'a', style: 'cutaway', animation: 'fade', opacity: 1,
+        },
+        {
+          id: 'o2', uri: IMAGES[1], startMs: 3200, endMs: 5000,
+          phrase: 'ikkinchi misol', prompt: 'b', style: 'fullscreen', animation: 'slide', opacity: 1,
+        },
+        {
+          id: 'o3', uri: IMAGES[2], startMs: 5800, endMs: 7600,
+          phrase: 'uchinchi misol', prompt: 'c', style: 'corner', animation: 'fade', opacity: 0.85,
+        },
+      ],
+    }),
+  });
 
   // Every caption style has to survive libass; they differ in border style,
   // animation tags and wrapping, which is exactly where ASS output breaks.

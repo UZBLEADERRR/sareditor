@@ -84,6 +84,7 @@ export function createProject(name: string, platform: PlatformId = 'instagram_re
     effects: defaultEffectsConfig(),
     audio: defaultAudioConfig(platform),
     export: exportConfigFor(platform),
+    overlays: [],
     renders: [],
   };
 }
@@ -97,6 +98,7 @@ export function withSource(project: Project, source: SourceClip): Project {
     analysis: undefined,
     transcript: undefined,
     aiPlan: undefined,
+    overlays: [],
     updatedAt: Date.now(),
   };
 }

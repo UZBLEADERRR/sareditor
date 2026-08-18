@@ -4,6 +4,8 @@ export type ModelOption = {
   id: string;
   label: string;
   hint?: string;
+  /** Generation methods the provider says this model supports. */
+  methods?: string[];
 };
 
 /**
@@ -56,15 +58,17 @@ async function listGeminiModels(baseUrl: string, apiKey: string, signal?: AbortS
     if (!response.ok) throw new AiRequestError(errorMessage(payload, response.status), response.status);
 
     for (const model of payload?.models ?? []) {
-      // Only models that can actually answer a prompt; the catalogue also
-      // carries embedding and tuning-only entries.
-      if (!(model.supportedGenerationMethods ?? []).includes('generateContent')) continue;
+      const methods: string[] = model.supportedGenerationMethods ?? [];
+      // Keep anything that can produce output for a prompt. `predict` covers
+      // the image-generation families, `generateContent` everything else.
+      if (!methods.includes('generateContent') && !methods.includes('predict')) continue;
       const id = String(model.name ?? '').replace(/^models\//, '');
       if (!id) continue;
       models.push({
         id,
         label: model.displayName || id,
         hint: model.inputTokenLimit ? `${formatTokens(model.inputTokenLimit)} kontekst` : undefined,
+        methods: model.supportedGenerationMethods,
       });
     }
     pageToken = payload?.nextPageToken;
@@ -198,4 +202,21 @@ function errorMessage(payload: any, status: number): string {
   if (status === 429) return 'So‘rovlar limiti tugadi.';
   const message = payload?.error?.message ?? payload?.message;
   return message ? `Modellarni olishda xato (${status}): ${message}` : `Modellarni olishda xato (${status})`;
+}
+
+/**
+ * Models offered for illustration generation.
+ *
+ * Nothing is filtered out — the catalogue is the source of truth and hiding a
+ * model the user came for is worse than showing one that will not work.
+ * Entries the provider describes as image generators are simply ranked first.
+ */
+export async function listImageModels(config: LlmConfig, signal?: AbortSignal): Promise<ModelOption[]> {
+  const models = await listLlmModels(config, signal);
+  const looksVisual = (model: ModelOption) =>
+    (model.methods ?? []).includes('predict') || /image|imagen|vision|picture/i.test(`${model.id} ${model.label}`);
+
+  const visual = models.filter(looksVisual);
+  const rest = models.filter((model) => !looksVisual(model));
+  return [...visual, ...rest];
 }

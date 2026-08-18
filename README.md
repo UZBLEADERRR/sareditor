@@ -38,11 +38,19 @@ Tashqariga faqat siz ulagan AI provayderiga nutq transkripsiyasi va montaj rejas
 - Kirish/chiqish fade, takrorlash, boshlanish nuqtasi
 - Ovozni tozalash (shovqin, gulduros) va platforma standartiga (-14 LUFS) keltirish
 
-**AI rejissyor**
-- Transkript va jimliklarni o‘qib montaj rejasini tuzadi
-- Qaysi joylar qolishini sabab bilan aytadi
-- Rang va subtitr uslubini tavsiya qiladi, muhim so‘zlarni belgilaydi
+**AI rejissyor — bitta tugma**
+“Boshlash” tugmasi bosilganda hammasi o‘zi bajariladi:
+- Nutqni so‘zma-so‘z vaqti bilan yozib oladi
+- Keraksiz joylarni, uzoq pauzalarni va noto‘g‘ri boshlangan gaplarni kesadi
+- Bo‘laklar orasiga mos o‘tish qo‘yadi
+- Rang va subtitr uslubini tanlaydi, muhim so‘zlarni belgilaydi
+- **Gapirilgan misollarga rasm chizib ekranga chiqaradi** — aniq narsa aytilganda
+  (predmet, joy, taqqoslash, natija) shu daqiqada rasm paydo bo‘ladi
 - Sarlavha, tavsif va hashtaglar yozadi
+
+Hammasi loyihaga qo‘llanadi, lekin qulflanmaydi — har bir bo‘limda qo‘lda o‘zgartirish mumkin.
+Rasmlar uch xil ko‘rinishda chiqadi: kadr yuqorisidagi kartochka, butun ekran, yoki kichik burchak.
+Ular subtitr **tagida** joylashadi, ya’ni matnni hech qachon to‘smaydi.
 
 **Eksport**
 - Instagram Reels / Feed, TikTok, YouTube Shorts / YouTube presetlari
@@ -160,7 +168,7 @@ src/ffmpeg/
   pipeline.ts            Loyihadan bitta ffmpeg buyrug‘i yasaydi (filter_complex)
   subtitles.ts           ASS generatori — so‘zma-so‘z karaoke, animatsiyalar
   timeline.ts            Kesish, tezlik va o‘tishlar vaqt hisobi
-  filters/               grade · look · motion · frame · audio · escape
+  filters/               grade · look · motion · frame · overlay · audio · escape
 src/analysis/
   parse.ts               ffmpeg loglarini o‘qiydigan toza parserlar
   silence · scenes · beats · loudness · autocut
@@ -168,7 +176,10 @@ src/ai/
   models.ts              Provayder katalogidan modellarni jonli olish
   providers/llm.ts       Gemini · Anthropic · OpenAI-mos (hammasi fetch orqali)
   transcribe.ts          Audio ajratish, bo‘laklash, so‘z vaqtlari (Gemini yoki Whisper)
-  director.ts            Montaj rejasi, tarjima, post matni
+  director.ts            Montaj rejasi, o‘tishlar, rasm g‘oyalari, tarjima, post matni
+  images.ts              Illyustratsiya yaratish (generateContent yoki predict)
+src/services/
+  autoEdit.ts            “Bitta tugma” — transkript → tahlil → reja → rasmlar
 src/screens/             Home · Editor (6 panel) · Settings
 src/store/               Loyihalar (AsyncStorage) va sozlamalar (SecureStore)
 plugins/withFFmpegKit.js Gradle repozitoriysini ulaydigan Expo config plugin

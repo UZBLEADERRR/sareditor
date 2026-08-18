@@ -5,6 +5,7 @@ import { frameStage } from './filters/frame';
 import { gradeFilters, lutFilter } from './filters/grade';
 import { audioFadeFilters, bloomSegment, fadeFilters, grainFilter, letterboxFilter, sharpenFilter, chromaticFilter, vignetteFilter } from './filters/look';
 import { shakeStage, stabilizeTransformFilter, zoomStage } from './filters/motion';
+import { overlayInputArgs, overlayStage } from './filters/overlay';
 import { audioEncoderArgs, containerArgs, encoderArgs, PLATFORM_PRESETS } from './presets';
 import { buildTimeline, mapBeatsToTimeline, mapWordsToTimeline, type Timeline } from './timeline';
 import { toFfmpegSeconds, round } from '../utils/format';
@@ -49,6 +50,16 @@ class Graph {
     if (!segment) return;
     this.parts.push(segment);
     this.label = outLabel;
+  }
+
+  /** Appends a pre-built graph node verbatim. */
+  raw(part: string): void {
+    this.parts.push(part);
+  }
+
+  /** Moves the cursor onto a label produced by raw nodes. */
+  setLabel(label: string): void {
+    this.label = label;
   }
 
   build(): string[] {
@@ -112,6 +123,10 @@ export function buildRender(options: BuildOptions): BuiltRender {
 
   if (music.loop && musicEnabled) inputs.push('-stream_loop', '-1');
   const musicInputIndex = musicEnabled ? 1 : -1;
+
+  // Overlay images are inputs too, and they come after the video and music.
+  const overlays = (project.overlays ?? []).filter((item) => item.uri && item.endMs > item.startMs);
+  const firstOverlayIndex = musicEnabled ? 2 : 1;
 
   const graphParts: string[] = [];
 
@@ -199,6 +214,21 @@ export function buildRender(options: BuildOptions): BuiltRender {
   );
 
   graph.apply(letterboxFilter(effects.letterbox, config.height));
+
+  // Illustrations sit above the picture but below the captions, so a cutaway
+  // never covers the words it was generated from.
+  if (overlays.length) {
+    const stage = overlayStage({
+      overlays,
+      firstInputIndex: firstOverlayIndex,
+      width: config.width,
+      height: config.height,
+      baseLabel: graph.current,
+      totalMs,
+    });
+    for (const part of stage.parts) graph.raw(part);
+    graph.setLabel(stage.outLabel);
+  }
 
   if (project.subtitle.enabled && options.assPath && captionWords.length) {
     graph.apply(assFilter(options.assPath, options.fontsDir));
@@ -304,6 +334,8 @@ export function buildRender(options: BuildOptions): BuiltRender {
   if (musicEnabled && music.uri) {
     args.push('-i', music.uri);
   }
+
+  args.push(...overlayInputArgs(overlays, fps));
 
   args.push(
     '-filter_complex', filterComplex,

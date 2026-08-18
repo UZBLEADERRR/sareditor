@@ -182,6 +182,30 @@ export type ExportConfig = {
   encoder: EncoderId;
 };
 
+export type OverlayStyle = 'fullscreen' | 'cutaway' | 'corner';
+export type OverlayAnimation = 'none' | 'fade' | 'slide';
+
+/**
+ * A picture dropped over the video while the speaker talks about something.
+ *
+ * Times are on the *export* timeline, because that is where the viewer hears
+ * the phrase — a cut made later would otherwise slide the image off its words.
+ */
+export type ImageOverlay = {
+  id: string;
+  /** Local file path of the generated image. */
+  uri: string;
+  startMs: number;
+  endMs: number;
+  /** The words this illustrates, kept so the user can see why it is here. */
+  phrase: string;
+  /** The prompt the image was generated from; editable and re-runnable. */
+  prompt: string;
+  style: OverlayStyle;
+  animation: OverlayAnimation;
+  opacity: number;
+};
+
 export type AiPlan = {
   hook: string;
   title: string;
@@ -192,8 +216,11 @@ export type AiPlan = {
   emphasisWords: string[];
   suggestedGrade: GradeId;
   suggestedSubtitleStyle: SubtitleStyleId;
+  suggestedTransition: TransitionId;
   musicMood: string;
   notes: string;
+  /** Moments the model thinks deserve an illustration, before any are made. */
+  imageIdeas: { startMs: number; endMs: number; phrase: string; prompt: string; style: OverlayStyle }[];
   createdAt: number;
   model: string;
 };
@@ -221,6 +248,7 @@ export type Project = {
   effects: EffectsConfig;
   audio: AudioConfig;
   export: ExportConfig;
+  overlays: ImageOverlay[];
   aiPlan?: AiPlan;
   /** Cached analysis so a re-render does not redo the expensive passes. */
   analysis?: {

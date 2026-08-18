@@ -4,7 +4,7 @@ import React from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { listLlmModels, listSttModels, type ModelOption } from '../ai/models';
+import { listImageModels, listLlmModels, listSttModels, type ModelOption } from '../ai/models';
 import { completeText } from '../ai/providers/llm';
 import { LLM_PROVIDERS, STT_PROVIDERS, type LlmProviderId, type SttProviderId } from '../ai/types';
 import { Badge, Button, Card, ChipRow, Divider, Field, Hint, IconButton, SectionTitle, ToggleRow } from '../components/ui';
@@ -139,6 +139,31 @@ export function SettingsScreen() {
           />
         </Card>
 
+        <SectionTitle>Ekrandagi rasmlar</SectionTitle>
+        <Card>
+          <Text style={styles.lead}>
+            AI gapirilgan misollarga rasm chizib ekranga chiqaradi. Buning uchun rasm chizadigan
+            modelni tanlang — kalit yuqoridagi bilan bir xil.
+          </Text>
+
+          {settings.llmProvider === 'gemini' ? (
+            <ModelPicker
+              label="Rasm modeli"
+              value={settings.imageModel}
+              options={settings.imageModelOptions}
+              hasKey={Boolean(settings.llmApiKey)}
+              onChange={(model) => settings.update({ imageModel: model })}
+              onLoad={() => listImageModels(settings.llmConfig())}
+              onLoaded={settings.setImageModelOptions}
+              autoLoad={false}
+            />
+          ) : (
+            <Hint>
+              Rasm yaratish hozircha faqat Gemini orqali ishlaydi. Yuqorida Gemini’ni tanlang.
+            </Hint>
+          )}
+        </Card>
+
         <SectionTitle>Nutqni matnga aylantirish (subtitr)</SectionTitle>
         <Card>
           <ChipRow<SttProviderId>
@@ -256,6 +281,7 @@ function ModelPicker({
   onChange,
   onLoad,
   onLoaded,
+  autoLoad = true,
 }: {
   label: string;
   value: string;
@@ -264,6 +290,8 @@ function ModelPicker({
   onChange: (model: string) => void;
   onLoad: () => Promise<ModelOption[]>;
   onLoaded: (options: ModelOption[]) => void;
+  /** Image models are a long list; only fetch them when the user asks. */
+  autoLoad?: boolean;
 }) {
   const [loading, setLoading] = React.useState(false);
   const [manual, setManual] = React.useState(false);
@@ -292,11 +320,11 @@ function ModelPicker({
   // Fetch once as soon as a key exists and nothing has been loaded yet.
   const autoLoaded = React.useRef(false);
   React.useEffect(() => {
-    if (hasKey && !options.length && !autoLoaded.current) {
+    if (autoLoad && hasKey && !options.length && !autoLoaded.current) {
       autoLoaded.current = true;
       load();
     }
-  }, [hasKey, options.length, load]);
+  }, [autoLoad, hasKey, options.length, load]);
 
   return (
     <View style={styles.picker}>
@@ -389,6 +417,7 @@ const styles = StyleSheet.create({
   sharedKeyText: { ...typography.tiny, color: colors.textDim, flex: 1, lineHeight: 16 },
 
   fieldLabel: { ...typography.small, color: colors.textDim },
+  lead: { ...typography.small, color: colors.textDim, lineHeight: 19, marginBottom: spacing.md },
 
   picker: { marginBottom: spacing.md },
   pickerHeader: {

@@ -22,6 +22,10 @@ type StoredPrefs = {
   /** Last catalogue fetched from the provider, so the picker survives a restart. */
   llmModelOptions: ModelOption[];
   sttModelOptions: ModelOption[];
+  /** Model used to draw illustrations; shares the AI provider's key. */
+  imageModel: string;
+  imageModelOptions: ModelOption[];
+  autoImages: boolean;
 };
 
 type SettingsState = StoredPrefs & {
@@ -34,13 +38,16 @@ type SettingsState = StoredPrefs & {
   setSttProvider: (provider: SttProviderId) => void;
   setLlmModelOptions: (options: ModelOption[]) => void;
   setSttModelOptions: (options: ModelOption[]) => void;
+  setImageModelOptions: (options: ModelOption[]) => void;
   update: (patch: Partial<StoredPrefs>) => void;
   setLlmApiKey: (key: string) => Promise<void>;
   setSttApiKey: (key: string) => Promise<void>;
   llmConfig: () => LlmConfig;
   sttConfig: () => SttConfig;
+  imageConfig: () => LlmConfig & { methods?: string[] };
   isLlmReady: () => boolean;
   isSttReady: () => boolean;
+  isImageReady: () => boolean;
 };
 
 /**
@@ -60,6 +67,9 @@ const DEFAULTS: StoredPrefs = {
   keepWorkFiles: false,
   llmModelOptions: [],
   sttModelOptions: [],
+  imageModel: '',
+  imageModelOptions: [],
+  autoImages: true,
 };
 
 /**
@@ -94,7 +104,14 @@ export const useSettings = create<SettingsState>((set, get) => ({
 
   setLlmProvider: (provider) => {
     // The previous provider's catalogue means nothing to the new one.
-    set({ llmProvider: provider, llmModel: '', llmBaseUrl: '', llmModelOptions: [] });
+    set({
+      llmProvider: provider,
+      llmModel: '',
+      llmBaseUrl: '',
+      llmModelOptions: [],
+      imageModel: '',
+      imageModelOptions: [],
+    });
     persist(get());
   },
 
@@ -110,6 +127,11 @@ export const useSettings = create<SettingsState>((set, get) => ({
 
   setSttModelOptions: (options) => {
     set({ sttModelOptions: options });
+    persist(get());
+  },
+
+  setImageModelOptions: (options) => {
+    set({ imageModelOptions: options });
     persist(get());
   },
 
@@ -151,8 +173,21 @@ export const useSettings = create<SettingsState>((set, get) => ({
     };
   },
 
+  imageConfig: () => {
+    const state = get();
+    return {
+      provider: state.llmProvider,
+      apiKey: state.llmApiKey,
+      baseUrl: state.llmBaseUrl || undefined,
+      model: state.imageModel,
+      // The endpoint shape depends on what the catalogue said this model does.
+      methods: state.imageModelOptions.find((option) => option.id === state.imageModel)?.methods,
+    };
+  },
+
   isLlmReady: () => Boolean(get().llmApiKey && get().llmModel),
   isSttReady: () => Boolean(effectiveSttKey(get()) && get().sttModel),
+  isImageReady: () => Boolean(get().llmApiKey && get().imageModel && get().llmProvider === 'gemini'),
 }));
 
 /**
@@ -192,6 +227,9 @@ function persist(state: SettingsState): void {
       keepWorkFiles: state.keepWorkFiles,
       llmModelOptions: state.llmModelOptions,
       sttModelOptions: state.sttModelOptions,
+      imageModel: state.imageModel,
+      imageModelOptions: state.imageModelOptions,
+      autoImages: state.autoImages,
     };
     AsyncStorage.setItem(PREFS_KEY, JSON.stringify(prefs)).catch(() => undefined);
   }, 250);
