@@ -1,0 +1,90 @@
+{
+  "expo": {
+    "name": "Fara Editor",
+    "slug": "fara-editor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "faraeditor",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#07070A",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#07070A"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.faraeditor.app",
+      "versionCode": 1,
+      "predictiveBackGestureEnabled": false,
+      "adaptiveIcon": {
+        "backgroundColor": "#07070A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.faraeditor.app",
+      "supportsTablet": false
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "enableProguardInReleaseBuilds": false,
+            "extraMavenRepos": []
+          }
+        }
+      ],
+      "./plugins/withFFmpegKit",
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "SAR Editor tayyor videolarni galereyaga saqlaydi.",
+          "photosPermission": "SAR Editor montaj uchun galereyadagi videolarni o'qiydi.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Montaj qilish uchun video tanlash kerak.",
+          "cameraPermission": "Video yozish uchun kameraga ruxsat kerak.",
+          "microphonePermission": "Video yozishda ovoz uchun mikrofon kerak."
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#07070A",
+          "imageWidth": 180
+        }
+      ]
+    ]
+  }
+}
