@@ -3,8 +3,7 @@ import React from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { translateWords } from '../../ai/director';
-import { transcribe, type TranscribeProgress } from '../../ai/transcribe';
-import { linesFromWords } from '../../ai/transcribe';
+import { linesFromWords, transcribe, type TranscribeProgress } from '../../ai/transcribe';
 import { Badge, Button, Card, ChipRow, Divider, Field, Hint, SectionTitle, SliderRow, ToggleRow } from '../../components/ui';
 import { SUBTITLE_STYLES, SUBTITLE_STYLE_ORDER, SYSTEM_FONTS, applySubtitleStyle } from '../../presets/subtitleStyles';
 import { listImportedFonts, pickFont } from '../../services/media';
