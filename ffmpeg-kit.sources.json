@@ -1,0 +1,14 @@
+{
+  "//": "Where to download the ffmpeg-kit Android AAR from. Arthenica retired the",
+  "//2": "official Maven Central artifacts in 2025, so the binary has to be fetched",
+  "//3": "explicitly. Entries are tried top to bottom; the first valid AAR wins.",
+  "//4": "Set FFMPEG_KIT_AAR_URL to override everything with your own mirror.",
+  "variant": "full-gpl",
+  "version": "6.0-2",
+  "mirrors": [
+    "https://github.com/2004durgesh/ffmpeg-kit/releases/download/v6.0.2/ffmpeg-kit-{variant}-{version}.aar",
+    "https://github.com/2004durgesh/ffmpeg-kit/releases/download/v6.0/ffmpeg-kit-{variant}-{version}.aar",
+    "https://github.com/Daniel-Griffiths/expo-ffmpeg/releases/download/binaries/ffmpeg-kit-android-{variant}.aar",
+    "https://repo1.maven.org/maven2/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar"
+  ]
+}

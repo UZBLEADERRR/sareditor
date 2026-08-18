@@ -1,0 +1,38 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.sareditor'
+version = '1.0.0'
+
+// Which ffmpeg-kit build to link against. `full-gpl` is the only variant that
+// carries *all* of the pieces this app relies on:
+//   libass + freetype + fribidi + fontconfig -> styled/animated .ass subtitles
+//   libx264 / libx265                        -> high quality H.264 / H.265 export
+//   lame + libvorbis + opus                  -> music decoding
+//   vid.stab                                 -> video stabilisation
+// Override from android/gradle.properties if you deliberately want a smaller APK.
+def ffmpegKitVariant = project.findProperty('sarEditor.ffmpegKit.variant') ?: 'full-gpl'
+def ffmpegKitVersion = project.findProperty('sarEditor.ffmpegKit.version') ?: '6.0-2'
+
+android {
+  namespace "expo.modules.ffmpeg"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+  lint {
+    abortOnError false
+  }
+}
+
+dependencies {
+  implementation 'com.facebook.react:react-android'
+
+  // Resolved from the vendored Maven repo at <repo root>/vendor/m2, which is
+  // populated by `npm run ffmpeg:fetch`. The repository itself is registered by
+  // the ./plugins/withFFmpegKit.js config plugin.
+  implementation "com.arthenica:ffmpeg-kit-${ffmpegKitVariant}:${ffmpegKitVersion}"
+  implementation 'com.arthenica:smart-exception-java:0.2.1'
+}
