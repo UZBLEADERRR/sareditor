@@ -4,10 +4,17 @@ import { run } from '../ffmpeg/engine';
 import type { Transcript, TranscriptLine, Word } from '../types/project';
 import { uid } from '../utils/id';
 import { toFileUri, toNativePath, workDir } from '../utils/paths';
+import { extractJson } from './json';
 import { AiConfigError, AiRequestError, STT_PROVIDERS, type SttConfig } from './types';
 
 /** Whisper-style endpoints cap uploads at 25 MB; 10 minutes of 64 kbps mono is ~4.8 MB. */
-const CHUNK_MS = 10 * 60 * 1000;
+const WHISPER_CHUNK_MS = 10 * 60 * 1000;
+/**
+ * Gemini transcribes through the same model that answers prompts, so the clip
+ * has to fit in one request *and* the per-word timings have to fit in the
+ * response. Five minutes keeps both comfortable — roughly 750 words out.
+ */
+const GEMINI_CHUNK_MS = 5 * 60 * 1000;
 
 export type TranscribeProgress = {
   stage: 'extract' | 'upload' | 'merge';
@@ -40,7 +47,8 @@ export async function transcribe(
     throw new AiConfigError('Transkripsiya uchun API kalit kerak. Sozlamalardan qo‘shing.');
   }
 
-  const chunks = await extractAudioChunks(videoPathOrUri, options.durationMs, options.onProgress);
+  const chunkMs = config.provider === 'gemini' ? GEMINI_CHUNK_MS : WHISPER_CHUNK_MS;
+  const chunks = await extractAudioChunks(videoPathOrUri, options.durationMs, chunkMs, options.onProgress);
 
   try {
     const allWords: Word[] = [];
@@ -99,6 +107,7 @@ type AudioChunk = { file: File; offsetMs: number };
 async function extractAudioChunks(
   videoPathOrUri: string,
   durationMs: number,
+  chunkMs: number,
   onProgress?: (progress: TranscribeProgress) => void
 ): Promise<AudioChunk[]> {
   onProgress?.({ stage: 'extract', progress: 0.02 });
@@ -119,7 +128,7 @@ async function extractAudioChunks(
     '-b:a', '64k',
   ];
 
-  if (durationMs <= CHUNK_MS) {
+  if (durationMs <= chunkMs) {
     const output = `${folderPath}/chunk_000.mp3`;
     await run([...shared, output], {
       totalMs: durationMs,
@@ -132,7 +141,7 @@ async function extractAudioChunks(
     [
       ...shared,
       '-f', 'segment',
-      '-segment_time', String(CHUNK_MS / 1000),
+      '-segment_time', String(chunkMs / 1000),
       '-reset_timestamps', '1',
       `${folderPath}/chunk_%03d.mp3`,
     ],
@@ -146,7 +155,7 @@ async function extractAudioChunks(
     .list()
     .filter((entry): entry is File => entry instanceof File && entry.uri.endsWith('.mp3'))
     .sort((a, b) => a.uri.localeCompare(b.uri))
-    .map((file, index) => ({ file, offsetMs: index * CHUNK_MS }));
+    .map((file, index) => ({ file, offsetMs: index * chunkMs }));
 }
 
 type ChunkResult = {
@@ -156,6 +165,8 @@ type ChunkResult = {
 };
 
 async function uploadChunk(config: SttConfig, file: File, signal?: AbortSignal): Promise<ChunkResult> {
+  if (config.provider === 'gemini') return transcribeWithGemini(config, file, signal);
+
   const baseUrl = (config.baseUrl || STT_PROVIDERS[config.provider].defaultBaseUrl).replace(/\/$/, '');
   if (!baseUrl) throw new AiConfigError('Transkripsiya server manzili ko‘rsatilmagan.');
 
@@ -196,6 +207,140 @@ async function uploadChunk(config: SttConfig, file: File, signal?: AbortSignal):
     language: typeof payload.language === 'string' ? payload.language : undefined,
     words: wordsFromPayload(payload),
   };
+}
+
+const GEMINI_PROMPT = `Transcribe every word spoken in this audio.
+
+Rules:
+- Times are milliseconds from the start of THIS audio clip, not from any larger recording.
+- One entry per spoken word, in the order spoken.
+- Transcribe in the language actually spoken. Do not translate.
+- Keep numbers as they are said.
+- If there is no speech at all, return an empty words array.`;
+
+/** Gemini's schema dialect is an OpenAPI subset; keep it to the supported types. */
+const GEMINI_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    language: { type: 'STRING', description: 'ISO-639-1 code of the spoken language' },
+    words: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          text: { type: 'STRING' },
+          startMs: { type: 'INTEGER' },
+          endMs: { type: 'INTEGER' },
+        },
+        required: ['text', 'startMs', 'endMs'],
+        propertyOrdering: ['text', 'startMs', 'endMs'],
+      },
+    },
+  },
+  required: ['language', 'words'],
+  propertyOrdering: ['language', 'words'],
+};
+
+/**
+ * Transcribes a chunk with a Gemini model.
+ *
+ * Unlike Whisper, this is a general multimodal model being asked for word
+ * timings, so the request pins a response schema and zero temperature. The
+ * result still goes through the same normalisation as every other provider,
+ * which drops entries with impossible timings rather than trusting the model.
+ */
+async function transcribeWithGemini(
+  config: SttConfig,
+  file: File,
+  signal?: AbortSignal
+): Promise<ChunkResult> {
+  const baseUrl = (config.baseUrl || STT_PROVIDERS.gemini.defaultBaseUrl).replace(/\/$/, '');
+  const audio = await file.base64();
+
+  const instruction = config.language
+    ? `${GEMINI_PROMPT}\n\nThe speaker is using this language: ${config.language}.`
+    : GEMINI_PROMPT;
+
+  const response = await fetch(
+    `${baseUrl}/v1beta/models/${encodeURIComponent(config.model)}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inline_data: { mime_type: 'audio/mpeg', data: audio } },
+              { text: instruction },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+          responseSchema: GEMINI_SCHEMA,
+        },
+      }),
+      signal,
+    }
+  );
+
+  const raw = await response.text();
+  if (!response.ok) {
+    throw new AiRequestError(transcriptionError(raw, response.status), response.status);
+  }
+
+  let payload: any;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    throw new AiRequestError('Transkripsiya javobini o‘qib bo‘lmadi');
+  }
+
+  const blocked = payload?.promptFeedback?.blockReason;
+  if (blocked) throw new AiRequestError(`Model audioni rad etdi: ${blocked}`);
+
+  const text = (payload?.candidates?.[0]?.content?.parts ?? [])
+    .map((part: { text?: string }) => part.text ?? '')
+    .join('');
+  if (!text.trim()) return { text: '', words: [] };
+
+  let parsed: any;
+  try {
+    parsed = extractJson<any>(text);
+  } catch {
+    throw new AiRequestError('Model vaqtlarni JSON ko‘rinishida qaytarmadi.');
+  }
+
+  const words = normaliseWords(parsed?.words);
+  return {
+    text: words.map((word) => word.text).join(' '),
+    language: typeof parsed?.language === 'string' ? parsed.language : undefined,
+    words,
+  };
+}
+
+/** Shared cleanup: drop entries the model got wrong rather than trusting them. */
+function normaliseWords(value: unknown): Word[] {
+  if (!Array.isArray(value)) return [];
+  const words: Word[] = [];
+  let previousEnd = 0;
+
+  for (const entry of value) {
+    const text = String(entry?.text ?? '').trim();
+    if (!text) continue;
+    const startMs = Math.max(0, Math.round(Number(entry?.startMs ?? 0)));
+    let endMs = Math.round(Number(entry?.endMs ?? 0));
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) continue;
+    // A model occasionally emits a zero-length or reversed span; give it a
+    // plausible duration instead of dropping the word out of the caption.
+    if (endMs <= startMs) endMs = startMs + 220;
+    if (startMs < previousEnd - 400) continue;
+    words.push({ text, startMs, endMs });
+    previousEnd = endMs;
+  }
+  return words;
 }
 
 function transcriptionError(raw: string, status: number): string {

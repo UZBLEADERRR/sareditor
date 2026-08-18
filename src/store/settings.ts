@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
-import { LLM_PROVIDERS, STT_PROVIDERS, type LlmConfig, type LlmProviderId, type SttConfig, type SttProviderId } from '../ai/types';
+import type { ModelOption } from '../ai/models';
+import { type LlmConfig, type LlmProviderId, type SttConfig, type SttProviderId } from '../ai/types';
 
 const PREFS_KEY = 'sar.settings.v1';
 const LLM_KEY_SECRET = 'sar_llm_api_key';
@@ -18,6 +19,9 @@ type StoredPrefs = {
   sttLanguage: string;
   defaultPlatform: string;
   keepWorkFiles: boolean;
+  /** Last catalogue fetched from the provider, so the picker survives a restart. */
+  llmModelOptions: ModelOption[];
+  sttModelOptions: ModelOption[];
 };
 
 type SettingsState = StoredPrefs & {
@@ -28,6 +32,8 @@ type SettingsState = StoredPrefs & {
   hydrate: () => Promise<void>;
   setLlmProvider: (provider: LlmProviderId) => void;
   setSttProvider: (provider: SttProviderId) => void;
+  setLlmModelOptions: (options: ModelOption[]) => void;
+  setSttModelOptions: (options: ModelOption[]) => void;
   update: (patch: Partial<StoredPrefs>) => void;
   setLlmApiKey: (key: string) => Promise<void>;
   setSttApiKey: (key: string) => Promise<void>;
@@ -37,16 +43,23 @@ type SettingsState = StoredPrefs & {
   isSttReady: () => boolean;
 };
 
+/**
+ * No model names live here. The provider's own catalogue is fetched with the
+ * user's key and the chosen id is stored — a baked-in default would be stale
+ * the moment the provider ships something newer.
+ */
 const DEFAULTS: StoredPrefs = {
-  llmProvider: 'anthropic',
-  llmModel: LLM_PROVIDERS.anthropic.defaultModel,
+  llmProvider: 'gemini',
+  llmModel: '',
   llmBaseUrl: '',
-  sttProvider: 'openai',
-  sttModel: STT_PROVIDERS.openai.defaultModel,
+  sttProvider: 'gemini',
+  sttModel: '',
   sttBaseUrl: '',
   sttLanguage: '',
   defaultPlatform: 'instagram_reels',
   keepWorkFiles: false,
+  llmModelOptions: [],
+  sttModelOptions: [],
 };
 
 /**
@@ -80,16 +93,23 @@ export const useSettings = create<SettingsState>((set, get) => ({
   },
 
   setLlmProvider: (provider) => {
-    const info = LLM_PROVIDERS[provider];
-    const patch = { llmProvider: provider, llmModel: info.defaultModel, llmBaseUrl: '' };
-    set(patch);
+    // The previous provider's catalogue means nothing to the new one.
+    set({ llmProvider: provider, llmModel: '', llmBaseUrl: '', llmModelOptions: [] });
     persist(get());
   },
 
   setSttProvider: (provider) => {
-    const info = STT_PROVIDERS[provider];
-    const patch = { sttProvider: provider, sttModel: info.defaultModel, sttBaseUrl: '' };
-    set(patch);
+    set({ sttProvider: provider, sttModel: '', sttBaseUrl: '', sttModelOptions: [] });
+    persist(get());
+  },
+
+  setLlmModelOptions: (options) => {
+    set({ llmModelOptions: options });
+    persist(get());
+  },
+
+  setSttModelOptions: (options) => {
+    set({ sttModelOptions: options });
     persist(get());
   },
 
@@ -124,7 +144,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
     const state = get();
     return {
       provider: state.sttProvider,
-      apiKey: state.sttApiKey,
+      apiKey: effectiveSttKey(state),
       baseUrl: state.sttBaseUrl || undefined,
       model: state.sttModel,
       language: state.sttLanguage || undefined,
@@ -132,8 +152,27 @@ export const useSettings = create<SettingsState>((set, get) => ({
   },
 
   isLlmReady: () => Boolean(get().llmApiKey && get().llmModel),
-  isSttReady: () => Boolean(get().sttApiKey && get().sttModel),
+  isSttReady: () => Boolean(effectiveSttKey(get()) && get().sttModel),
 }));
+
+/**
+ * One provider, one key. When both halves point at the same provider the user
+ * should not have to paste the same key twice, so the speech side falls back to
+ * the model key unless it has one of its own.
+ */
+function effectiveSttKey(state: SettingsState): string {
+  if (state.sttApiKey) return state.sttApiKey;
+  return state.sttProvider === state.llmProvider ? state.llmApiKey : '';
+}
+
+export function sttKeyIsShared(state: {
+  sttApiKey: string;
+  sttProvider: SttProviderId;
+  llmProvider: LlmProviderId;
+  llmApiKey: string;
+}): boolean {
+  return !state.sttApiKey && state.sttProvider === state.llmProvider && Boolean(state.llmApiKey);
+}
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -151,6 +190,8 @@ function persist(state: SettingsState): void {
       sttLanguage: state.sttLanguage,
       defaultPlatform: state.defaultPlatform,
       keepWorkFiles: state.keepWorkFiles,
+      llmModelOptions: state.llmModelOptions,
+      sttModelOptions: state.sttModelOptions,
     };
     AsyncStorage.setItem(PREFS_KEY, JSON.stringify(prefs)).catch(() => undefined);
   }, 250);

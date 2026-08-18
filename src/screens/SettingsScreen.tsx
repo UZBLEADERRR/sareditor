@@ -1,18 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LLM_PROVIDERS, STT_PROVIDERS, type LlmProviderId, type SttProviderId } from '../ai/types';
+import { listLlmModels, listSttModels, type ModelOption } from '../ai/models';
 import { completeText } from '../ai/providers/llm';
-import { Button, Card, ChipRow, Divider, Field, Hint, IconButton, SectionTitle, ToggleRow } from '../components/ui';
+import { LLM_PROVIDERS, STT_PROVIDERS, type LlmProviderId, type SttProviderId } from '../ai/types';
+import { Badge, Button, Card, ChipRow, Divider, Field, Hint, IconButton, SectionTitle, ToggleRow } from '../components/ui';
+import { deviceInfo } from '../ffmpeg/engine';
 import { PLATFORM_ORDER, PLATFORM_PRESETS } from '../ffmpeg/presets';
-import { useSettings } from '../store/settings';
+import { sttKeyIsShared, useSettings } from '../store/settings';
 import { colors, radius, spacing, typography } from '../theme';
 import { formatBytes } from '../utils/format';
 import { clearWorkDir, workDirSizeBytes } from '../utils/paths';
-import { deviceInfo } from '../ffmpeg/engine';
 
 export function SettingsScreen() {
   const navigation = useNavigation();
@@ -28,6 +29,7 @@ export function SettingsScreen() {
 
   const llmInfo = LLM_PROVIDERS[settings.llmProvider];
   const sttInfo = STT_PROVIDERS[settings.sttProvider];
+  const sharedKey = sttKeyIsShared(settings);
 
   const testConnection = async () => {
     setTesting(true);
@@ -105,25 +107,18 @@ export function SettingsScreen() {
             onChangeText={(value) => settings.setLlmApiKey(value)}
             placeholder={llmInfo.keyPlaceholder}
             secure
+            hint={!settings.llmApiKey && llmInfo.keyUrl ? `Kalitni bu yerdan oling: ${llmInfo.keyUrl}` : undefined}
           />
 
-          {llmInfo.models.length ? (
-            <View style={{ marginBottom: spacing.md }}>
-              <Text style={styles.fieldLabel}>Model</Text>
-              <ChipRow
-                options={llmInfo.models.map((model) => ({ value: model, label: model }))}
-                value={settings.llmModel}
-                onChange={(model) => settings.update({ llmModel: model })}
-              />
-            </View>
-          ) : (
-            <Field
-              label="Model nomi"
-              value={settings.llmModel}
-              onChangeText={(value) => settings.update({ llmModel: value })}
-              placeholder="masalan: meta-llama/llama-3.3-70b-instruct"
-            />
-          )}
+          <ModelPicker
+            label="Model"
+            value={settings.llmModel}
+            options={settings.llmModelOptions}
+            hasKey={Boolean(settings.llmApiKey)}
+            onChange={(model) => settings.update({ llmModel: model })}
+            onLoad={() => listLlmModels(settings.llmConfig())}
+            onLoaded={settings.setLlmModelOptions}
+          />
 
           <Field
             label="Server manzili (ixtiyoriy)"
@@ -140,7 +135,7 @@ export function SettingsScreen() {
             variant="secondary"
             onPress={testConnection}
             loading={testing}
-            disabled={!settings.llmApiKey}
+            disabled={!settings.isLlmReady()}
           />
         </Card>
 
@@ -156,31 +151,33 @@ export function SettingsScreen() {
           />
           <Hint style={{ marginBottom: spacing.md }}>{sttInfo.hint}</Hint>
 
+          {sharedKey ? (
+            <View style={styles.sharedKey}>
+              <Ionicons name="link-outline" size={15} color={colors.teal} />
+              <Text style={styles.sharedKeyText}>
+                Yuqoridagi {LLM_PROVIDERS[settings.llmProvider].label} kaliti ishlatilmoqda. Boshqa
+                kalit kerak bo‘lsa, pastga kiriting.
+              </Text>
+            </View>
+          ) : null}
+
           <Field
-            label="API kalit"
+            label={sharedKey ? 'Boshqa API kalit (ixtiyoriy)' : 'API kalit'}
             value={settings.sttApiKey}
             onChangeText={(value) => settings.setSttApiKey(value)}
-            placeholder="sk-..."
+            placeholder={sharedKey ? 'bo‘sh qoldirsangiz yuqoridagisi ishlatiladi' : 'API kalit'}
             secure
           />
 
-          {sttInfo.models.length ? (
-            <View style={{ marginBottom: spacing.md }}>
-              <Text style={styles.fieldLabel}>Model</Text>
-              <ChipRow
-                options={sttInfo.models.map((model) => ({ value: model, label: model }))}
-                value={settings.sttModel}
-                onChange={(model) => settings.update({ sttModel: model })}
-              />
-            </View>
-          ) : (
-            <Field
-              label="Model nomi"
-              value={settings.sttModel}
-              onChangeText={(value) => settings.update({ sttModel: value })}
-              placeholder="whisper-1"
-            />
-          )}
+          <ModelPicker
+            label="Model"
+            value={settings.sttModel}
+            options={settings.sttModelOptions}
+            hasKey={Boolean(settings.sttApiKey || sharedKey)}
+            onChange={(model) => settings.update({ sttModel: model })}
+            onLoad={() => listSttModels(settings.sttConfig())}
+            onLoaded={settings.setSttModelOptions}
+          />
 
           <Field
             label="Server manzili (ixtiyoriy)"
@@ -244,6 +241,118 @@ export function SettingsScreen() {
   );
 }
 
+/**
+ * Model chooser backed by the provider's own catalogue.
+ *
+ * The list is fetched, never hardcoded, so a model released yesterday shows up
+ * without an app update. A free-text field stays available underneath because
+ * gateways and proxies routinely expose models their `/models` endpoint omits.
+ */
+function ModelPicker({
+  label,
+  value,
+  options,
+  hasKey,
+  onChange,
+  onLoad,
+  onLoaded,
+}: {
+  label: string;
+  value: string;
+  options: ModelOption[];
+  hasKey: boolean;
+  onChange: (model: string) => void;
+  onLoad: () => Promise<ModelOption[]>;
+  onLoaded: (options: ModelOption[]) => void;
+}) {
+  const [loading, setLoading] = React.useState(false);
+  const [manual, setManual] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const models = await onLoad();
+      onLoaded(models);
+      if (!models.length) {
+        Alert.alert('Model topilmadi', 'Provayder bo‘sh ro‘yxat qaytardi. Model nomini qo‘lda kiriting.');
+        setManual(true);
+        return;
+      }
+      // Nothing chosen yet, or the old choice is gone from the catalogue.
+      if (!value || !models.some((model) => model.id === value)) {
+        onChange(models[0].id);
+      }
+    } catch (error) {
+      Alert.alert('Modellar yuklanmadi', (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [onLoad, onLoaded, onChange, value]);
+
+  // Fetch once as soon as a key exists and nothing has been loaded yet.
+  const autoLoaded = React.useRef(false);
+  React.useEffect(() => {
+    if (hasKey && !options.length && !autoLoaded.current) {
+      autoLoaded.current = true;
+      load();
+    }
+  }, [hasKey, options.length, load]);
+
+  return (
+    <View style={styles.picker}>
+      <View style={styles.pickerHeader}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <View style={styles.pickerActions}>
+          {options.length ? <Badge label={`${options.length} ta`} color={colors.teal} /> : null}
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.accentSoft} />
+          ) : (
+            <Pressable onPress={load} disabled={!hasKey} hitSlop={8}>
+              <Text style={[styles.pickerAction, !hasKey && { color: colors.textFaint }]}>
+                {options.length ? 'Yangilash' : 'Yuklash'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {!hasKey ? (
+        <Hint>Avval API kalitni kiriting — modellar ro‘yxati o‘sha kalit bilan olinadi.</Hint>
+      ) : options.length ? (
+        <>
+          <ChipRow
+            options={options.map((model) => ({ value: model.id, label: model.label }))}
+            value={value}
+            onChange={onChange}
+          />
+          {options.find((model) => model.id === value)?.hint ? (
+            <Hint>{options.find((model) => model.id === value)?.hint}</Hint>
+          ) : null}
+        </>
+      ) : loading ? (
+        <Hint>Provayderdan modellar so‘ralmoqda…</Hint>
+      ) : (
+        <Hint>Ro‘yxat hali yuklanmagan.</Hint>
+      )}
+
+      {manual || (hasKey && !options.length && !loading) ? (
+        <View style={{ marginTop: spacing.sm }}>
+          <Field
+            label="Model nomini qo‘lda kiritish"
+            value={value}
+            onChangeText={onChange}
+            placeholder="provayder bergan model nomi"
+          />
+        </View>
+      ) : (
+        <Pressable onPress={() => setManual(true)} hitSlop={6}>
+          <Text style={styles.manualLink}>Model nomini qo‘lda kiritish</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: {
@@ -268,7 +377,29 @@ const styles = StyleSheet.create({
   },
   noticeText: { ...typography.tiny, color: colors.textDim, flex: 1, lineHeight: 16 },
 
-  fieldLabel: { ...typography.small, color: colors.textDim, marginBottom: 6 },
+  sharedKey: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: `${colors.teal}10`,
+  },
+  sharedKeyText: { ...typography.tiny, color: colors.textDim, flex: 1, lineHeight: 16 },
+
+  fieldLabel: { ...typography.small, color: colors.textDim },
+
+  picker: { marginBottom: spacing.md },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  pickerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  pickerAction: { ...typography.tiny, color: colors.accentSoft, fontWeight: '700' },
+  manualLink: { ...typography.tiny, color: colors.textFaint, marginTop: spacing.sm },
 
   cacheRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
   cacheLabel: { ...typography.small, color: colors.text },

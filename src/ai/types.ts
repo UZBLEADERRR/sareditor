@@ -1,7 +1,7 @@
 import type { GradeId, SubtitleStyleId } from '../types/project';
 
-export type LlmProviderId = 'anthropic' | 'openai' | 'gemini' | 'openai_compatible';
-export type SttProviderId = 'openai' | 'groq' | 'openai_compatible';
+export type LlmProviderId = 'gemini' | 'anthropic' | 'openai' | 'openai_compatible';
+export type SttProviderId = 'gemini' | 'openai' | 'groq' | 'openai_compatible';
 
 export type LlmConfig = {
   provider: LlmProviderId;
@@ -20,88 +20,93 @@ export type SttConfig = {
   language?: string;
 };
 
+/**
+ * Model lists are never hardcoded — providers ship new models constantly and a
+ * baked-in list is stale the day it is written. Every provider here exposes a
+ * models endpoint, and src/ai/models.ts reads it with the user's own key.
+ */
 export type LlmProviderInfo = {
   id: LlmProviderId;
   label: string;
   hint: string;
-  defaultModel: string;
   defaultBaseUrl: string;
   keyPlaceholder: string;
-  models: string[];
+  /** Where to get a key, shown when the field is empty. */
+  keyUrl: string;
 };
 
 export type SttProviderInfo = {
   id: SttProviderId;
   label: string;
   hint: string;
-  defaultModel: string;
   defaultBaseUrl: string;
-  models: string[];
+  /** Whether the provider transcribes through its own multimodal model. */
+  multimodal: boolean;
 };
 
 export const LLM_PROVIDERS: Record<LlmProviderId, LlmProviderInfo> = {
+  gemini: {
+    id: 'gemini',
+    label: 'Google Gemini',
+    hint: 'Bitta kalit bilan ham matn, ham nutq ishlaydi',
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com',
+    keyPlaceholder: 'AIza...',
+    keyUrl: 'aistudio.google.com/apikey',
+  },
   anthropic: {
     id: 'anthropic',
     label: 'Anthropic (Claude)',
-    hint: 'Montaj rejasi va matnlar uchun eng kuchli variant',
-    defaultModel: 'claude-opus-5',
+    hint: 'Matn va montaj rejasi uchun',
     defaultBaseUrl: 'https://api.anthropic.com',
     keyPlaceholder: 'sk-ant-...',
-    models: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    keyUrl: 'console.anthropic.com',
   },
   openai: {
     id: 'openai',
     label: 'OpenAI',
     hint: 'GPT modellari',
-    defaultModel: 'gpt-4o',
     defaultBaseUrl: 'https://api.openai.com/v1',
     keyPlaceholder: 'sk-...',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'],
-  },
-  gemini: {
-    id: 'gemini',
-    label: 'Google Gemini',
-    hint: 'Tez va arzon',
-    defaultModel: 'gemini-2.0-flash',
-    defaultBaseUrl: 'https://generativelanguage.googleapis.com',
-    keyPlaceholder: 'AIza...',
-    models: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+    keyUrl: 'platform.openai.com/api-keys',
   },
   openai_compatible: {
     id: 'openai_compatible',
     label: 'Boshqa (OpenAI-mos)',
-    hint: 'OpenRouter, Groq, Together, o‘z serveringiz — /chat/completions',
-    defaultModel: '',
+    hint: 'OpenRouter, Groq, Together, o‘z serveringiz',
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
     keyPlaceholder: 'API kalit',
-    models: [],
+    keyUrl: '',
   },
 };
 
 export const STT_PROVIDERS: Record<SttProviderId, SttProviderInfo> = {
+  gemini: {
+    id: 'gemini',
+    label: 'Google Gemini',
+    hint: 'Audio to‘g‘ridan-to‘g‘ri modelga beriladi — alohida kalit kerak emas',
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com',
+    multimodal: true,
+  },
   openai: {
     id: 'openai',
     label: 'OpenAI Whisper',
-    hint: 'So‘z-darajasidagi aniq vaqtlar',
-    defaultModel: 'whisper-1',
+    hint: 'Nutqqa ixtisoslashgan, so‘z vaqtlari juda aniq',
     defaultBaseUrl: 'https://api.openai.com/v1',
-    models: ['whisper-1'],
+    multimodal: false,
   },
   groq: {
     id: 'groq',
     label: 'Groq Whisper',
-    hint: 'Eng tez va arzon transkripsiya',
-    defaultModel: 'whisper-large-v3-turbo',
+    hint: 'Eng tez va arzon Whisper',
     defaultBaseUrl: 'https://api.groq.com/openai/v1',
-    models: ['whisper-large-v3-turbo', 'whisper-large-v3'],
+    multimodal: false,
   },
   openai_compatible: {
     id: 'openai_compatible',
     label: 'Boshqa (OpenAI-mos)',
     hint: '/audio/transcriptions endpointiga ega har qanday server',
-    defaultModel: 'whisper-1',
     defaultBaseUrl: '',
-    models: [],
+    multimodal: false,
   },
 };
 

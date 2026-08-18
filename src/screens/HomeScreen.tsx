@@ -39,8 +39,10 @@ export function HomeScreen() {
   const setActive = useProjects((state) => state.setActive);
 
   const defaultPlatform = useSettings((state) => state.defaultPlatform);
-  const llmReady = useSettings((state) => Boolean(state.llmApiKey));
-  const sttReady = useSettings((state) => Boolean(state.sttApiKey));
+  // Readiness means a key *and* a chosen model, and the speech side may be
+  // borrowing the model key when both point at the same provider.
+  const llmReady = useSettings((state) => state.isLlmReady());
+  const sttReady = useSettings((state) => state.isSttReady());
 
   const [busy, setBusy] = React.useState(false);
 
@@ -95,10 +97,10 @@ export function HomeScreen() {
             <Text style={styles.setupTitle}>AI hali ulanmagan</Text>
             <Text style={styles.setupText}>
               {!sttReady && !llmReady
-                ? 'Subtitr va avto-montaj uchun API kalitlarni qo‘shing'
+                ? 'Kalitni qo‘shing va modelni tanlang — bittasi ham matn, ham nutqqa yetadi'
                 : !sttReady
-                  ? 'Subtitr uchun transkripsiya kaliti kerak'
-                  : 'Avto-montaj uchun AI kaliti kerak'}
+                  ? 'Subtitr uchun nutq modelini tanlang'
+                  : 'Avto-montaj uchun modelni tanlang'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />

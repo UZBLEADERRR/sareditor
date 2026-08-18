@@ -57,12 +57,19 @@ Tashqariga faqat siz ulagan AI provayderiga nutq transkripsiyasi va montaj rejas
 Ilova hech qanday kalit bilan kelmaydi — **o‘zingiznikini** ulaysiz. Kalitlar Android keystore
 ichida (`expo-secure-store`) saqlanadi va faqat siz tanlagan provayderga yuboriladi.
 
-Sozlamalar bo‘limida ikkita mustaqil ulanish bor:
+**Standart — Google Gemini, bitta kalit bilan.** Gemini ham matn yozadi, ham audioni
+to‘g‘ridan-to‘g‘ri o‘qiydi, shuning uchun subtitr uchun alohida kalit kerak emas: ikkala bo‘lim
+ham Gemini bo‘lsa, nutq tomoni yuqoridagi kalitni o‘zi oladi.
 
 | Nima uchun | Qo‘llab-quvvatlanadi |
 |---|---|
-| **AI model** — montaj rejasi, tarjima, post matni | Anthropic (Claude), OpenAI, Google Gemini yoki har qanday OpenAI-mos server (OpenRouter, Groq, Together, o‘zingizniki) |
-| **Transkripsiya** — subtitr uchun so‘z vaqtlari | OpenAI Whisper, Groq Whisper yoki `/audio/transcriptions` endpointiga ega har qanday server |
+| **AI model** — montaj rejasi, tarjima, post matni | Google Gemini, Anthropic (Claude), OpenAI yoki har qanday OpenAI-mos server (OpenRouter, Groq, Together, o‘zingizniki) |
+| **Nutq → matn** — subtitr uchun so‘z vaqtlari | Google Gemini yoki Whisper (OpenAI, Groq, `/audio/transcriptions` bergan har qanday server) |
+
+**Model nomlari ilovaga yozilmagan.** Kalitni kiritsangiz, ilova provayderning o‘z ro‘yxatini
+so‘raydi va nima bo‘lsa shuni ko‘rsatadi — kecha chiqqan model ham darrov ro‘yxatda bo‘ladi,
+ilovani yangilash shart emas. Ro‘yxat bo‘sh chiqsa yoki gateway o‘z modelini yashirsa, nomni
+qo‘lda kiritish maydoni ham bor.
 
 Ikkalasi ham ixtiyoriy: AI ulanmasa ham kesish, effektlar, musiqa va eksport to‘liq ishlaydi.
 
@@ -158,8 +165,9 @@ src/analysis/
   parse.ts               ffmpeg loglarini o‘qiydigan toza parserlar
   silence · scenes · beats · loudness · autocut
 src/ai/
-  providers/llm.ts       Anthropic · OpenAI-mos · Gemini (hammasi fetch orqali)
-  transcribe.ts          Audio ajratish, bo‘laklash, so‘z vaqtlari
+  models.ts              Provayder katalogidan modellarni jonli olish
+  providers/llm.ts       Gemini · Anthropic · OpenAI-mos (hammasi fetch orqali)
+  transcribe.ts          Audio ajratish, bo‘laklash, so‘z vaqtlari (Gemini yoki Whisper)
   director.ts            Montaj rejasi, tarjima, post matni
 src/screens/             Home · Editor (6 panel) · Settings
 src/store/               Loyihalar (AsyncStorage) va sozlamalar (SecureStore)
