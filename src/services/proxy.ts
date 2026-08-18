@@ -5,6 +5,7 @@ import { needsProxy, proxyArgs } from '../ffmpeg/proxy';
 import type { SourceClip } from '../types/project';
 import { uid } from '../utils/id';
 import { mediaDir, toNativePath } from '../utils/paths';
+import { trace, traced } from './diagnostics';
 
 export type ProxyProgress = { progress: number };
 
@@ -24,18 +25,23 @@ export async function buildPreviewProxy(
   source: SourceClip,
   onProgress?: (progress: ProxyProgress) => void
 ): Promise<string> {
-  if (!source.width || !source.height || !needsProxy(source)) return source.uri;
+  if (!source.width || !source.height || !needsProxy(source)) {
+    trace(`proxy skipped ${source.width}x${source.height}`);
+    return source.uri;
+  }
 
   const output = new File(mediaDir(), `proxy_${uid()}.mp4`);
   if (output.exists) output.delete();
   const outputPath = toNativePath(output.uri);
 
   try {
-    await run(proxyArgs(source, outputPath), {
-      key: `proxy_${source.id}`,
-      totalMs: source.durationMs,
-      onProgress: (event) => onProgress?.({ progress: event.progress }),
-    });
+    await traced(`proxy ${source.width}x${source.height}`, () =>
+      run(proxyArgs(source, outputPath), {
+        key: `proxy_${source.id}`,
+        totalMs: source.durationMs,
+        onProgress: (event) => onProgress?.({ progress: event.progress }),
+      })
+    );
   } catch {
     if (output.exists) output.delete();
     return source.uri;

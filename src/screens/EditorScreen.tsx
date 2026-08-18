@@ -14,6 +14,7 @@ import { buildTimeline, outputToSource, sourceToOutput } from '../ffmpeg/timelin
 import { LivePreview } from '../preview/LivePreview';
 import type { RootStackParamList } from '../navigation';
 import { generateThumbnails } from '../services/media';
+import { trace } from '../services/diagnostics';
 import { buildPreviewProxy } from '../services/proxy';
 import { useProjects } from '../store/projects';
 import { colors, radius, spacing, typography } from '../theme';
@@ -95,6 +96,7 @@ export function EditorScreen() {
   React.useEffect(() => {
     if (!source || !projectId) return undefined;
     let cancelled = false;
+    trace(`editor mount ${source.width}x${source.height} proxy=${source.previewUri ? 'yes' : 'no'}`);
 
     (async () => {
       let playbackUri = source.previewUri;
@@ -103,14 +105,20 @@ export function EditorScreen() {
         setPreparing(true);
         try {
           playbackUri = await buildPreviewProxy(source);
-          if (cancelled) return;
-          if (playbackUri !== source.uri) {
-            patchProject(projectId, { source: { ...source, previewUri: playbackUri } });
-          }
         } catch {
+          // A proxy that could not be built must not leave the editor with
+          // nothing to play; fall back to the original and record that, so the
+          // preview stops waiting for a file that is never coming.
           playbackUri = source.uri;
         } finally {
-          if (!cancelled) setPreparing(false);
+          if (!cancelled) {
+            // Recorded even when it is the original, so the decision survives a
+            // remount and the preview knows the wait is over either way.
+            patchProject(projectId, {
+              source: { ...source, previewUri: playbackUri ?? source.uri },
+            });
+            setPreparing(false);
+          }
         }
       }
 

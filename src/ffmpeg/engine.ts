@@ -3,6 +3,7 @@ import type { EventSubscription } from 'expo-modules-core';
 import SarFFmpeg, { type DeviceInfo, type FFmpegProgress, type FFmpegResult } from '../../modules/ffmpeg';
 import { fontsDir, toNativePath } from '../utils/paths';
 import { uid } from '../utils/id';
+import { trace } from '../services/diagnostics';
 
 export type RunOptions = {
   /** Stable id so the run can be cancelled and progress attributed correctly. */
@@ -48,7 +49,9 @@ export async function run(args: string[], options: RunOptions = {}): Promise<FFm
   }
 
   try {
+    trace(`ffmpeg ${key} → ${args.slice(0, 6).join(' ')}`);
     const result = await SarFFmpeg.run(key, args, options.totalMs ?? 0);
+    trace(`ffmpeg ${key} ✓ rc=${result.returnCode} ${Math.round(result.durationMs)}ms`);
     if (result.cancelled) throw new CancelledError();
     if (!result.success) {
       throw new FFmpegError(extractFfmpegError(result.logs) ?? 'FFmpeg xatolik bilan tugadi', result);
@@ -104,7 +107,9 @@ export type MediaInfo = {
 
 /** ffprobe wrapper that normalises the handful of fields the editor cares about. */
 export async function probe(pathOrUri: string): Promise<MediaInfo> {
+  trace('ffprobe →');
   const result = await SarFFmpeg.probe(toNativePath(pathOrUri));
+  trace(`ffprobe ✓ ok=${result.ok}`);
   if (!result.ok || !result.json) {
     throw new Error('Fayl o‘qib bo‘lmadi. Format qo‘llab-quvvatlanmasligi mumkin.');
   }
@@ -184,7 +189,9 @@ let fontsRegistered = false;
  */
 export async function registerFonts(mapping: Record<string, string> = {}): Promise<string[]> {
   const dirs = ['/system/fonts', toNativePath(fontsDir().uri)];
+  trace('registerFonts →');
   const registered = await SarFFmpeg.registerFontDirectories(dirs, mapping);
+  trace(`registerFonts ✓ ${registered.length}`);
   fontsRegistered = true;
   return registered;
 }

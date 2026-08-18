@@ -19,6 +19,7 @@ import { useBrand } from '../brand';
 import { Badge, Button, EmptyState, IconButton } from '../components/ui';
 import { PLATFORM_PRESETS } from '../ffmpeg/presets';
 import type { RootStackParamList } from '../navigation';
+import { describe, trace } from '../services/diagnostics';
 import { generateThumbnails, pickVideo, recordVideo } from '../services/media';
 import { useProjects } from '../store/projects';
 import { useSettings } from '../store/settings';
@@ -52,6 +53,7 @@ export function HomeScreen() {
   const startProject = React.useCallback(
     async (mode: 'library' | 'camera', startInAi = false) => {
       setBusy(true);
+      trace(`startProject ${mode}`);
       try {
         const source = mode === 'library' ? await pickVideo() : await recordVideo();
         if (!source) return;
@@ -61,8 +63,10 @@ export function HomeScreen() {
           defaultPlatform as Project['export']['platform']
         );
         attachSource(project.id, source);
+        trace(`project ${project.id} → editor`);
         navigation.navigate('Editor', { projectId: project.id, startInAi });
       } catch (error) {
+        trace(`startProject ✗ ${describe(error)}`);
         Alert.alert('Video ochilmadi', (error as Error).message);
       } finally {
         setBusy(false);

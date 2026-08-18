@@ -6,6 +6,7 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Directory, File } from 'expo-file-system';
 
 import { probe } from '../ffmpeg/engine';
+import { trace, traced } from './diagnostics';
 import type { MediaAsset, SourceClip } from '../types/project';
 import { uid } from '../utils/id';
 import { safeFileName } from '../ffmpeg/filters/escape';
@@ -21,7 +22,7 @@ async function copyIntoApp(uri: string, directory: Directory, name: string): Pro
   const target = new File(directory, safeFileName(name, `${uid()}.bin`));
   if (target.exists) target.delete();
   const source = new File(uri);
-  await source.copy(target);
+  await traced(`copy ${name}`, async () => source.copy(target));
   return target.uri;
 }
 
@@ -31,13 +32,15 @@ export async function pickVideo(): Promise<SourceClip | null> {
     throw new Error('Galereyaga ruxsat berilmadi. Sozlamalardan ruxsat bering.');
   }
 
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['videos'],
-    allowsMultipleSelection: false,
-    quality: 1,
-    // Transcoding would re-compress before we ever touch the file.
-    videoExportPreset: ImagePicker.VideoExportPreset.Passthrough,
-  });
+  const result = await traced('pickVideo picker', () =>
+    ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['videos'],
+      allowsMultipleSelection: false,
+      quality: 1,
+      // Transcoding would re-compress before we ever touch the file.
+      videoExportPreset: ImagePicker.VideoExportPreset.Passthrough,
+    })
+  );
 
   if (result.canceled || !result.assets?.length) return null;
   return describeVideo(result.assets[0].uri, result.assets[0].fileName ?? 'video.mp4');
@@ -59,12 +62,14 @@ export async function recordVideo(): Promise<SourceClip | null> {
 
 /** Copies the clip into app storage and reads its real properties with ffprobe. */
 export async function describeVideo(uri: string, name: string): Promise<SourceClip> {
+  trace(`describeVideo ${name} ${uri.slice(0, 40)}`);
   const localUri = uri.startsWith('content://')
     ? await copyIntoApp(uri, mediaDir(), name)
     : uri;
 
-  const info = await probe(localUri);
+  const info = await traced('probe source', () => probe(localUri));
   if (!info.hasVideo) throw new Error('Bu faylda video oqim topilmadi.');
+  trace(`source ${info.width}x${info.height} ${Math.round(info.durationMs)}ms fps=${info.fps}`);
 
   const file = new File(localUri);
   return {
@@ -229,6 +234,7 @@ export async function shareFile(uri: string): Promise<void> {
 /** Frames for the timeline strip. Failures are tolerated — a gap beats a crash. */
 export async function generateThumbnails(uri: string, timesMs: number[]): Promise<(string | null)[]> {
   const results: (string | null)[] = [];
+  trace(`thumbnails ${timesMs.length} →`);
   for (const time of timesMs) {
     try {
       const thumb = await VideoThumbnails.getThumbnailAsync(toFileUri(uri), {
@@ -240,6 +246,7 @@ export async function generateThumbnails(uri: string, timesMs: number[]): Promis
       results.push(null);
     }
   }
+  trace(`thumbnails ✓ ${results.filter(Boolean).length}/${results.length}`);
   return results;
 }
 

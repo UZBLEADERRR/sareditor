@@ -1,6 +1,11 @@
 {
-  "platforms": ["android"],
+  "platforms": [
+    "android"
+  ],
   "android": {
-    "modules": ["expo.modules.ffmpeg.FFmpegModule"]
+    "modules": [
+      "expo.modules.ffmpeg.FFmpegModule",
+      "expo.modules.ffmpeg.DiagnosticsModule"
+    ]
   }
 }

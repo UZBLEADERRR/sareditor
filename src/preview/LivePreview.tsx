@@ -27,10 +27,12 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 
+import { needsProxy } from '../ffmpeg/proxy';
 import { buildTimeline, outputToSource, sourceToOutput } from '../ffmpeg/timeline';
 import { ASPECT_RATIOS } from '../ffmpeg/presets';
 import { colors, radius, spacing, typography } from '../theme';
 import type { ImageOverlay, Project } from '../types/project';
+import { trace } from '../services/diagnostics';
 import { clamp, formatTimecode } from '../utils/format';
 import { toFileUri } from '../utils/paths';
 import { layoutCaption } from './captionLayout';
@@ -124,8 +126,24 @@ export function LivePreview({
   useMixPlayback({ project, playing, outputMs });
 
   // Always the proxy when one exists: the original may be 4K HEVC, which is
-  // more than the frame decoder can safely handle.
-  const playbackUri = source ? (source.previewUri ?? source.uri) : null;
+  // more than the frame decoder can safely handle. While the proxy is still
+  // being written there is deliberately nothing to play — handing the decoder
+  // the original in the meantime would walk straight back into the failure the
+  // proxy exists to avoid.
+  const playbackUri = source
+    ? preparing
+      ? null
+      : (source.previewUri ?? (needsProxy(source) ? null : source.uri))
+    : null;
+
+  // The frame decoder runs on MediaCodec under the hood, which is the single
+  // most likely place for the process to go down without an exception. Fence it
+  // so a crash log says whether the decoder was ever handed the file.
+  React.useEffect(() => {
+    if (!playbackUri) return undefined;
+    trace(`skia video open ${playbackUri.split('/').pop()}`);
+    return () => trace('skia video close');
+  }, [playbackUri]);
 
   const video = useVideo(playbackUri ? toFileUri(playbackUri) : null, {
     paused,

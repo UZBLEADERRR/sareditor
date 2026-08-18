@@ -19,6 +19,8 @@ import { colors, radius, spacing, typography } from '../theme';
 import { pickLogo } from '../services/media';
 import { formatBytes } from '../utils/format';
 import { clearWorkDir, toFileUri, workDirSizeBytes } from '../utils/paths';
+import { CrashReport } from '../components/CrashReport';
+import { currentTrace, deviceInfo as diagnosticsInfo, previousTrace } from '../services/diagnostics';
 
 export function SettingsScreen() {
   const navigation = useNavigation();
@@ -29,6 +31,7 @@ export function SettingsScreen() {
   const [testing, setTesting] = React.useState(false);
   const [voiceTesting, setVoiceTesting] = React.useState(false);
   const [cacheBytes, setCacheBytes] = React.useState(0);
+  const [log, setLog] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setCacheBytes(workDirSizeBytes());
@@ -381,12 +384,35 @@ export function SettingsScreen() {
           </Text>
           <Text style={styles.deviceText}>{device ? device.abis.join(', ') : ''}</Text>
           <Divider />
+          {/*
+            The log is the only evidence left behind when the app disappears
+            instead of erroring, so it has to be reachable without a cable.
+          */}
+          <Pressable
+            style={styles.logRow}
+            onPress={() => {
+              const info = diagnosticsInfo();
+              const header = info
+                ? Object.entries(info)
+                    .map(([key, value]) => `${key}=${value}`)
+                    .join(' ')
+                : 'qurilma maʼlumoti yoʻq';
+              setLog(
+                `${header}\n\n--- shu seans ---\n${currentTrace()}\n--- oldingi seans ---\n${previousTrace()}`
+              );
+            }}
+          >
+            <Text style={styles.logLabel}>Diagnostika jurnali</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+          </Pressable>
+          <Divider />
           <Text style={styles.license}>
             Video qayta ishlash FFmpeg (ffmpeg-kit full-gpl) orqali bajariladi. Ilova GPL-3.0 shartlari
             asosida tarqatiladi.
           </Text>
         </Card>
       </ScrollView>
+      {log !== null ? <CrashReport report={log} onDismiss={() => setLog(null)} /> : null}
     </View>
   );
 }
@@ -633,6 +659,8 @@ const styles = StyleSheet.create({
   cacheLabel: { ...typography.small, color: colors.text },
   cacheValue: { ...typography.mono, color: colors.accentSoft },
 
+  logRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm },
+  logLabel: { ...typography.body, color: colors.text },
   deviceText: { ...typography.tiny, color: colors.textDim, marginBottom: 4 },
   license: { ...typography.tiny, color: colors.textFaint, lineHeight: 16 },
 });
