@@ -3,6 +3,7 @@ import { AGENT_TOOLS } from './agentTools';
 import { AgentExecutor, type AgentServices } from './agentExecutor';
 import { chatWithTools, type ChatMessage, type ToolCall } from './providers/toolChat';
 import { AiRequestError } from './types';
+import { throwIfAborted } from '../utils/abort';
 
 export type AgentEvent =
   | { type: 'thinking' }
@@ -71,7 +72,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentRun> {
   let steps = 0;
 
   for (; steps < maxSteps; steps += 1) {
-    services.signal?.throwIfAborted();
+    throwIfAborted(services.signal);
     emit({ type: 'thinking' });
 
     const turn = await chatWithTools(services.llm, {
@@ -93,7 +94,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentRun> {
     let finished = false;
 
     for (const call of turn.calls) {
-      services.signal?.throwIfAborted();
+      throwIfAborted(services.signal);
       emit({ type: 'tool', name: call.name, label: toolLabel(call) });
 
       const execution = await execute(executor, call);

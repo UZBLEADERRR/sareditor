@@ -1,6 +1,6 @@
 import { File } from 'expo-file-system';
 
-import { run } from '../ffmpeg/engine';
+import { CancelledError, run } from '../ffmpeg/engine';
 import { needsProxy, proxyArgs } from '../ffmpeg/proxy';
 import type { SourceClip } from '../types/project';
 import { uid } from '../utils/id';
@@ -34,17 +34,26 @@ export async function buildPreviewProxy(
   if (output.exists) output.delete();
   const outputPath = toNativePath(output.uri);
 
+  const encode = (hardware: boolean) =>
+    run(proxyArgs(source, outputPath, { videoCodec: source.videoCodec, hardware }), {
+      key: `proxy_${source.id}`,
+      totalMs: source.durationMs,
+      onProgress: (event) => onProgress?.({ progress: event.progress }),
+    });
+
   try {
-    await traced(`proxy ${source.width}x${source.height}`, () =>
-      run(proxyArgs(source, outputPath), {
-        key: `proxy_${source.id}`,
-        totalMs: source.durationMs,
-        onProgress: (event) => onProgress?.({ progress: event.progress }),
-      })
-    );
-  } catch {
-    if (output.exists) output.delete();
-    return source.uri;
+    // The chip decodes 4K sixty times a second; the CPU takes minutes over it.
+    // Not every device honours the request, so a refusal simply costs the time
+    // ffmpeg needed to find out and the software path runs instead.
+    await traced(`proxy ${source.width}x${source.height} hw`, () => encode(true));
+  } catch (hardwareFailure) {
+    if (hardwareFailure instanceof CancelledError) throw hardwareFailure;
+    try {
+      await traced(`proxy ${source.width}x${source.height} sw`, () => encode(false));
+    } catch {
+      if (output.exists) output.delete();
+      return source.uri;
+    }
   }
 
   return output.exists && (output.size ?? 0) > 1024 ? outputPath : source.uri;

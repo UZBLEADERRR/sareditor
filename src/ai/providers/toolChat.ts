@@ -3,6 +3,14 @@ import { AiConfigError, AiRequestError, LLM_PROVIDERS, type LlmConfig } from '..
 
 const ANTHROPIC_VERSION = '2023-06-01';
 
+/**
+ * Reasoning models draw their thinking from the same budget as their answer, so
+ * a tight ceiling can be spent entirely on reasoning and come back with neither
+ * text nor a tool call. Every turn here is short; the ceiling only has to stop
+ * a runaway.
+ */
+const THINKING_HEADROOM = 8000;
+
 /** One request from the model to run a tool. */
 export type ToolCall = {
   /** Provider-issued id, echoed back with the result. Gemini gets a synthetic one. */
@@ -242,7 +250,7 @@ async function geminiTurn(config: LlmConfig, request: ToolChatRequest): Promise<
       // the same time is rejected, and the tool calls are the output that matters.
       generationConfig: {
         temperature: request.temperature ?? 0.2,
-        maxOutputTokens: request.maxTokens ?? 4000,
+        maxOutputTokens: (request.maxTokens ?? 4000) + THINKING_HEADROOM,
       },
     }),
     signal: request.signal,
@@ -251,12 +259,14 @@ async function geminiTurn(config: LlmConfig, request: ToolChatRequest): Promise<
   const payload = await readJson(response);
   if (!response.ok) throw new AiRequestError(errorMessage(payload, response.status), response.status);
 
-  const parts: any[] = payload?.candidates?.[0]?.content?.parts ?? [];
+  const candidate = payload?.candidates?.[0];
+  const parts: any[] = candidate?.content?.parts ?? [];
   const calls: ToolCall[] = [];
   let text = '';
 
   parts.forEach((part, index) => {
-    if (typeof part?.text === 'string') text += part.text;
+    // Thought summaries arrive as parts as well; they are not the reply.
+    if (typeof part?.text === 'string' && !part?.thought) text += part.text;
     const call = part?.functionCall ?? part?.function_call;
     if (call?.name) {
       // Gemini does not issue call ids, so one is synthesised and only used to
@@ -268,6 +278,14 @@ async function geminiTurn(config: LlmConfig, request: ToolChatRequest): Promise<
       });
     }
   });
+
+  if (!text.trim() && !calls.length) {
+    throw new AiRequestError(
+      candidate?.finishReason === 'MAX_TOKENS'
+        ? 'Gemini javob yozishga ulgurmadi — model o‘ylashga hamma joyni sarfladi. Boshqa modelni tanlang.'
+        : `Gemini bo‘sh javob qaytardi${candidate?.finishReason ? ` (${candidate.finishReason})` : ''}.`
+    );
+  }
 
   return { text: text.trim(), calls };
 }

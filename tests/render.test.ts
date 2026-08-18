@@ -108,7 +108,7 @@ export function runRenderTests(runner: Runner): void {
     const big = path.join(outputDir, 'proxy-source.mp4');
     ffmpeg([
       '-hide_banner', '-loglevel', 'error', '-y',
-      '-f', 'lavfi', '-i', 'testsrc2=size=2160x3840:rate=30:duration=3',
+      '-f', 'lavfi', '-i', 'testsrc2=size=2160x3840:rate=60:duration=3',
       '-f', 'lavfi', '-i', 'sine=frequency=300:duration=3',
       '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-shortest', big,
@@ -116,7 +116,7 @@ export function runRenderTests(runner: Runner): void {
 
     const proxy = path.join(outputDir, 'proxy-out.mp4');
     const { ok, stderr } = ffmpeg(
-      proxyArgs({ uri: big, width: 2160, height: 3840, hasAudio: true }, proxy)
+      proxyArgs({ uri: big, width: 2160, height: 3840, hasAudio: true, fps: 60 }, proxy)
     );
     runner.check('the proxy encodes', ok, ok ? '' : stderr.trim().split('\n').slice(-2).join(' '));
 
@@ -135,6 +135,26 @@ export function runRenderTests(runner: Runner): void {
     runner.check(
       'the proxy is baseline H.264, which every Android decoder handles',
       /Baseline/i.test(ffmpeg(['-hide_banner', '-i', proxy, '-f', 'null', '-']).stderr),
+    );
+    // Half the frames of a 60 fps phone clip never reach the screen; decoding
+    // and re-encoding them is what made building the proxy take minutes.
+    runner.check(
+      'a 60 fps clip is halved for playback',
+      Math.abs(facts.fps - 30) < 1,
+      String(facts.fps)
+    );
+    runner.check(
+      'asking for hardware decode names the codec ffmpeg expects',
+      proxyArgs({ uri: 'a.mp4', width: 3840, height: 2160, hasAudio: false, fps: 60 }, 'o.mp4', {
+        videoCodec: 'hevc',
+      }).join(' ').includes('-c:v hevc_mediacodec'),
+    );
+    runner.check(
+      'the software retry asks for no decoder at all',
+      !proxyArgs({ uri: 'a.mp4', width: 3840, height: 2160, hasAudio: false, fps: 60 }, 'o.mp4', {
+        videoCodec: 'hevc',
+        hardware: false,
+      }).join(' ').includes('mediacodec'),
     );
   } catch (error) {
     runner.check('playback proxy', false, (error as Error).message);

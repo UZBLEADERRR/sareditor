@@ -128,6 +128,7 @@ export type MediaFacts = {
   hasAudio: boolean;
   width: number;
   height: number;
+  fps: number;
 };
 
 export function inspect(file: string): MediaFacts {
@@ -142,6 +143,7 @@ export function inspect(file: string): MediaFacts {
   const outputIndex = stderr.indexOf('Output #0');
   const inputBlock = stderr.slice(0, outputIndex === -1 ? stderr.length : outputIndex);
   const size = inputBlock.match(/Video: .*?, (\d+)x(\d+)/);
+  const rate = inputBlock.match(/([\d.]+) fps/);
 
   const summaryIndex = stderr.lastIndexOf('Integrated loudness');
   const lufs = summaryIndex === -1 ? null : stderr.slice(summaryIndex).match(/I:\s*(-?[\d.]+)\s*LUFS/);
@@ -153,6 +155,7 @@ export function inspect(file: string): MediaFacts {
     hasAudio: /Stream #0:\d+.*: Audio:/.test(inputBlock),
     width: size ? Number(size[1]) : 0,
     height: size ? Number(size[2]) : 0,
+    fps: rate ? Number(rate[1]) : 0,
   };
 }
 

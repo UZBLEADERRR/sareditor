@@ -6,6 +6,7 @@ import { uid } from '../utils/id';
 import { toFileUri, toNativePath, workDir } from '../utils/paths';
 import { extractJson } from './json';
 import { AiConfigError, AiRequestError, STT_PROVIDERS, type SttConfig } from './types';
+import { throwIfAborted } from '../utils/abort';
 
 /** Whisper-style endpoints cap uploads at 25 MB; 10 minutes of 64 kbps mono is ~4.8 MB. */
 const WHISPER_CHUNK_MS = 10 * 60 * 1000;
@@ -56,7 +57,7 @@ export async function transcribe(
     let language = config.language ?? '';
 
     for (let index = 0; index < chunks.length; index += 1) {
-      options.signal?.throwIfAborted();
+      throwIfAborted(options.signal);
       options.onProgress?.({
         stage: 'upload',
         progress: 0.25 + (0.7 * index) / chunks.length,

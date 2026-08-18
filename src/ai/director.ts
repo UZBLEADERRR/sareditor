@@ -67,6 +67,7 @@ export async function planEdit(
     user: prompt,
     maxTokens: 8000,
     temperature: 0.3,
+    json: true,
     signal,
   });
 
@@ -240,6 +241,7 @@ export async function translateWords(
     user: `Target language: ${targetLanguage}\n\nLines:\n${JSON.stringify(lines.map((l) => l.text), null, 2)}`,
     maxTokens: 8000,
     temperature: 0.2,
+    json: true,
     signal,
   });
 
@@ -319,6 +321,7 @@ export async function generateCopy(
     user: `Platform: ${platform}\n\nTranscript:\n${transcript.text.slice(0, 6000)}`,
     maxTokens: 2000,
     temperature: 0.7,
+    json: true,
     signal,
   });
 

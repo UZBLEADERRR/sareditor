@@ -9,6 +9,7 @@ import { buildTimeline, sourceToOutput } from '../ffmpeg/timeline';
 import { applySubtitleStyle } from '../presets/subtitleStyles';
 import type { AiPlan, ImageOverlay, Project, Segment, Transcript } from '../types/project';
 import { uid } from '../utils/id';
+import { throwIfAborted } from '../utils/abort';
 
 export type AutoEditStage = 'transcribe' | 'analyse' | 'plan' | 'images' | 'apply';
 
@@ -81,7 +82,7 @@ export async function runAutoEdit(project: Project, options: AutoEditOptions): P
   }
 
   // ------------------------------------------------------------ silences ---
-  options.signal?.throwIfAborted();
+  throwIfAborted(options.signal);
   let silences: SilenceRange[] | undefined = project.analysis?.silences;
   if (!silences) {
     report({ stage: 'analyse', progress: 0.48, message: 'Jimliklar tahlil qilinmoqda…' });
@@ -89,7 +90,7 @@ export async function runAutoEdit(project: Project, options: AutoEditOptions): P
   }
 
   // ---------------------------------------------------------------- plan ---
-  options.signal?.throwIfAborted();
+  throwIfAborted(options.signal);
   report({ stage: 'plan', progress: 0.56, message: 'AI montaj rejasini tuzmoqda…' });
 
   const plan = await planEdit(
@@ -167,7 +168,7 @@ export async function runAutoEdit(project: Project, options: AutoEditOptions): P
     }
 
     for (let index = 0; index < placed.length; index += 1) {
-      options.signal?.throwIfAborted();
+      throwIfAborted(options.signal);
       const { idea, startMs, endMs } = placed[index];
       report({
         stage: 'images',

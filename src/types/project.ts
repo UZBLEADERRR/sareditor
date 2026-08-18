@@ -18,6 +18,8 @@ export type SourceClip = {
   hasAudio: boolean;
   /** Rotation metadata in degrees; 90/270 means width/height are swapped on screen. */
   rotation: number;
+  /** ffprobe's codec name, used to pick a hardware decoder for the proxy. */
+  videoCodec?: string;
   sizeBytes: number;
   /**
    * Small, plainly-encoded copy used for on-screen playback and thumbnails.

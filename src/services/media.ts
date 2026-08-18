@@ -82,6 +82,7 @@ export async function describeVideo(uri: string, name: string): Promise<SourceCl
     fps: info.fps,
     hasAudio: info.hasAudio,
     rotation: info.rotation,
+    videoCodec: info.videoCodec,
     sizeBytes: file.exists ? file.size ?? info.sizeBytes : info.sizeBytes,
   };
 }

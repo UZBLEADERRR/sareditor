@@ -6,11 +6,23 @@ const ANTHROPIC_VERSION = '2023-06-01';
 export type LlmRequest = {
   system: string;
   user: string;
+  /** A ceiling on the *answer*; thinking headroom is added on top. */
   maxTokens?: number;
   /** Non-zero only for creative copy; planning runs deterministic. */
   temperature?: number;
+  /** Ask the provider to constrain the answer to JSON. */
+  json?: boolean;
   signal?: AbortSignal;
 };
+
+/**
+ * Reasoning models spend their output budget thinking before they write a word,
+ * and the budget is one pool: ask for 64 tokens and every one of them can go on
+ * reasoning, leaving a response with no text in it at all. Anything this app
+ * asks for is small, so the ceiling is only ever a safety net — set it high
+ * enough that thinking cannot starve the answer.
+ */
+const THINKING_HEADROOM = 8000;
 
 /**
  * One text-in / text-out call, dispatched to whichever provider the user
@@ -146,8 +158,8 @@ async function completeGemini(config: LlmConfig, request: LlmRequest): Promise<s
       contents: [{ role: 'user', parts: [{ text: request.user }] }],
       generationConfig: {
         temperature: request.temperature ?? 0.4,
-        maxOutputTokens: request.maxTokens ?? 8000,
-        responseMimeType: 'application/json',
+        maxOutputTokens: (request.maxTokens ?? 8000) + THINKING_HEADROOM,
+        ...(request.json ? { responseMimeType: 'application/json' } : {}),
       },
     }),
     signal: request.signal,
@@ -157,10 +169,39 @@ async function completeGemini(config: LlmConfig, request: LlmRequest): Promise<s
   if (!response.ok) {
     throw new AiRequestError(providerErrorMessage(payload, response.status), response.status);
   }
-  const parts = payload?.candidates?.[0]?.content?.parts ?? [];
-  const text = parts.map((part: { text?: string }) => part.text ?? '').join('').trim();
-  if (!text) throw new AiRequestError('Gemini bo‘sh javob qaytardi');
+  const candidate = payload?.candidates?.[0];
+  const parts = candidate?.content?.parts ?? [];
+  // Thought summaries come back as parts too, and they are not the answer.
+  const text = parts
+    .filter((part: { thought?: boolean }) => !part?.thought)
+    .map((part: { text?: string }) => part.text ?? '')
+    .join('')
+    .trim();
+  if (!text) throw new AiRequestError(emptyGeminiMessage(candidate, payload));
   return text;
+}
+
+/**
+ * Says *why* nothing came back, which is the difference between a message the
+ * creator can act on and one that only says something went wrong.
+ */
+function emptyGeminiMessage(candidate: any, payload: any): string {
+  const blocked = payload?.promptFeedback?.blockReason;
+  if (blocked) return `Gemini so‘rovni rad etdi (${blocked}).`;
+
+  switch (candidate?.finishReason) {
+    case 'MAX_TOKENS':
+      return 'Gemini javob yozishga ulgurmadi — model o‘ylashga hamma joyni sarfladi. Boshqa modelni tanlang.';
+    case 'SAFETY':
+    case 'PROHIBITED_CONTENT':
+      return 'Gemini bu so‘rovga javob bermadi (xavfsizlik filtri).';
+    case 'RECITATION':
+      return 'Gemini javobni bekor qildi (nusxa ko‘chirish filtri).';
+    default:
+      return candidate?.finishReason
+        ? `Gemini bo‘sh javob qaytardi (${candidate.finishReason}).`
+        : 'Gemini bo‘sh javob qaytardi.';
+  }
 }
 
 async function readJson(response: Response): Promise<any> {

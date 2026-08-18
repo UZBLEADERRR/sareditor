@@ -68,7 +68,7 @@ export function SettingsScreen() {
       const reply = await completeText(settings.llmConfig(), {
         system: 'Reply with the single word OK.',
         user: 'ping',
-        maxTokens: 64,
+        maxTokens: 256,
       });
       Alert.alert('Ulanish ishladi', `Model javobi: ${reply.slice(0, 120) || '(bo‘sh)'}`);
     } catch (error) {
