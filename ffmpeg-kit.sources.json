@@ -1,14 +1,19 @@
 {
   "//": "Where to download the ffmpeg-kit Android AAR from. Arthenica retired the",
-  "//2": "official Maven Central artifacts in 2025, so the binary has to be fetched",
-  "//3": "explicitly. Entries are tried top to bottom; the first valid AAR wins.",
-  "//4": "Set FFMPEG_KIT_AAR_URL to override everything with your own mirror.",
+  "//2": "project in 2025 and the com.arthenica:ffmpeg-kit-* artifacts were pulled",
+  "//3": "from Maven Central, so the binary has to be fetched from a mirror that",
+  "//4": "still retains it. Entries are tried top to bottom; the first response that",
+  "//5": "is a real AAR wins (scripts/fetch-ffmpeg-kit.mjs checks the zip header, so",
+  "//6": "a mirror that answers 200 with an error page is skipped rather than cached).",
+  "//7": "Verified live by scripts/probe-ffmpeg-mirrors.mjs. Re-run it if these rot.",
+  "//8": "Set FFMPEG_KIT_AAR_URL to override everything with your own mirror.",
   "variant": "full-gpl",
   "version": "6.0-2",
   "mirrors": [
-    "https://github.com/2004durgesh/ffmpeg-kit/releases/download/v6.0.2/ffmpeg-kit-{variant}-{version}.aar",
-    "https://github.com/2004durgesh/ffmpeg-kit/releases/download/v6.0/ffmpeg-kit-{variant}-{version}.aar",
-    "https://github.com/Daniel-Griffiths/expo-ffmpeg/releases/download/binaries/ffmpeg-kit-android-{variant}.aar",
-    "https://repo1.maven.org/maven2/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar"
+    "https://maven-central.storage-download.googleapis.com/maven2/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://maven-central-asia.storage-download.googleapis.com/maven2/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://repo.huaweicloud.com/repository/maven/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://maven.aliyun.com/repository/public/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://maven.aliyun.com/repository/central/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar"
   ]
 }

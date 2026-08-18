@@ -100,8 +100,14 @@ Arthenica 2025-yilda `ffmpeg-kit` loyihasini yopdi va `com.arthenica:ffmpeg-kit-
 Maven Central’dan olib tashladi. Binarniklarning o‘zi tarqatiladi (LGPL-3.0, `-gpl` variantlari
 uchun GPL-3.0), faqat ularni endi qo‘lda ko‘chirish kerak.
 
-`npm run ffmpeg:fetch` ularni `ffmpeg-kit.sources.json` dagi manzillardan qidiradi va
-`./vendor/m2` ichida kichik Maven repozitoriysi yasaydi. Agar manzillar ishlamasa:
+`npm run ffmpeg:fetch` ularni `ffmpeg-kit.sources.json` dagi mirror’lardan qidiradi va
+`./vendor/m2` ichida kichik Maven repozitoriysi yasaydi. Ro‘yxatdagi birinchi manzil —
+Google’ning Maven Central GCS mirror’i; undan keyin Huawei va Aliyun keladi. Skript yuklangan
+faylning zip sarlavhasini tekshiradi, shuning uchun 200 qaytarib xato sahifa bergan mirror
+o‘tkazib yuboriladi.
+
+Agar bir kun bu manzillar ham o‘lsa, `node scripts/probe-ffmpeg-mirrors.mjs` tirik manbalarni
+qayta topadi (tarmog‘i ochiq mashinada yoki CI’da ishga tushiring). Yoki to‘g‘ridan-to‘g‘ri:
 
 ```bash
 FFMPEG_KIT_AAR_URL=https://sizning-serveringiz/ffmpeg-kit-full-gpl-6.0-2.aar npm run ffmpeg:fetch
@@ -113,6 +119,11 @@ ham bo‘ladi.
 
 `full-gpl` varianti tanlangan, chunki hamma kerakli qism faqat shunda bor: `libass` (uslubli
 subtitr), `libx264`/`libx265` (sifatli eksport), `libmp3lame` (musiqa), `vid.stab` (stabilizatsiya).
+
+Bir eslatma: 6.0-2 binarniklari 4 KB sahifa hajmiga moslangan. Android 15’dagi 16 KB sahifali
+qurilmalarda (va Play Store’ning yangi talabida) muammo bo‘lishi mumkin. Sideload qilingan APK
+uchun bu odatda sezilmaydi; agar kerak bo‘lsa, `FFMPEG_KIT_AAR_URL` orqali 16 KB’ga moslangan
+jamoaviy build’ni ulash mumkin.
 
 ---
 
