@@ -60,6 +60,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      # Skia ships its native libraries through a postinstall step, which
+      # --ignore-scripts deliberately skips; without them the CMake configure
+      # fails with "Skia prebuilt binaries not found".
+      - name: Fetch Skia binaries
+        run: npx install-skia
+
       # ffmpeg-kit's Maven Central artifacts were withdrawn in 2025, so the AAR
       # is mirrored into ./vendor/m2 before Gradle ever tries to resolve it.
       # Set the FFMPEG_KIT_AAR_URL variable or secret to use your own mirror.

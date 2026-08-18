@@ -21,6 +21,8 @@ export const SILENT_VERTICAL: SourceClip = {
 
 export const MUSIC = fixtures.music;
 export const IMAGES = fixtures.images;
+export const BROLL = fixtures.broll;
+export const VOICE = fixtures.voice;
 
 function evenlySpacedWords(fromMs: number, toMs: number, tokens: string[]): Word[] {
   const step = (toMs - fromMs) / tokens.length;
@@ -78,6 +80,8 @@ export function baseProject(overrides: Partial<Project> = {}): Project {
     // Small frames keep the suite fast; the filter graph is resolution independent.
     export: { ...exportConfigFor('instagram_reels', 'x264'), width: 540, height: 960, videoBitrateKbps: 2500 },
     overlays: [],
+    library: [],
+    voiceovers: [],
     renders: [],
   };
   return { ...project, ...overrides };
@@ -196,6 +200,66 @@ export function allScenarios(): Scenario[] {
         {
           id: 'o3', uri: IMAGES[2], startMs: 5800, endMs: 7600,
           phrase: 'uchinchi misol', prompt: 'c', style: 'corner', animation: 'fade', opacity: 0.85,
+        },
+      ],
+    }),
+  });
+
+  // A voice line has to be delayed onto its moment, mixed in, and duck the
+  // original underneath it — none of which the plain audio path exercises.
+  scenarios.push({
+    name: 'voiceover_and_broll',
+    project: baseProject({
+      segments: [{ id: 's1', startMs: 0, endMs: 8000, speed: 1 }],
+      voiceovers: [
+        {
+          id: 'v1', uri: VOICE, text: 'salom', startMs: 1500, durationMs: 2000,
+          volumeDb: 0, voiceLabel: 'test', duckOriginal: true,
+        },
+        {
+          id: 'v2', uri: VOICE, text: 'yana', startMs: 5000, durationMs: 2000,
+          volumeDb: -3, voiceLabel: 'test', duckOriginal: false,
+        },
+      ],
+      overlays: [
+        {
+          id: 'b1', uri: BROLL, kind: 'video', sourceStartMs: 1000,
+          startMs: 2000, endMs: 5000,
+          phrase: 'misol', prompt: '', style: 'cutaway', animation: 'fade', opacity: 1,
+        },
+      ],
+      audio: {
+        originalVolumeDb: 0, muteOriginal: false, voiceEnhance: false,
+        normalizeLoudness: false, targetLufs: -14,
+      },
+    }),
+  });
+
+  // A silent source with nothing but narration must still produce audio.
+  scenarios.push({
+    name: 'voiceover_only',
+    project: baseProject({
+      source: SILENT_VERTICAL,
+      segments: [{ id: 's', startMs: 0, endMs: 6000, speed: 1 }],
+      voiceovers: [
+        {
+          id: 'v1', uri: VOICE, text: 'faqat ovoz', startMs: 2000, durationMs: 2000,
+          volumeDb: 0, voiceLabel: 'test', duckOriginal: false,
+        },
+      ],
+    }),
+  });
+
+  // Hand-placed overlay: the drag in the preview has to survive the export.
+  scenarios.push({
+    name: 'overlay_hand_placed',
+    project: baseProject({
+      segments: [{ id: 's1', startMs: 0, endMs: 6000, speed: 1 }],
+      overlays: [
+        {
+          id: 'h1', uri: IMAGES[0], startMs: 500, endMs: 4000,
+          phrase: '', prompt: '', style: 'cutaway', animation: 'fade', opacity: 1,
+          xPct: 30, yPct: 70, widthPct: 40,
         },
       ],
     }),

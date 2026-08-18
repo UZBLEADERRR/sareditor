@@ -38,6 +38,8 @@ export function ensureFixtures(): {
   silentVertical: string;
   music: string;
   images: string[];
+  broll: string;
+  voice: string;
 } {
   fs.mkdirSync(fixturesDir, { recursive: true });
   fs.mkdirSync(outputDir, { recursive: true });
@@ -95,7 +97,28 @@ export function ensureFixtures(): {
     }
   );
 
-  return { source, silentVertical, music, images };
+  // A B-roll clip the agent can drop over the main video.
+  const broll = path.join(fixturesDir, 'broll.mp4');
+  if (!fs.existsSync(broll)) {
+    ffmpegOrThrow([
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=30:duration=6',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+      broll,
+    ]);
+  }
+
+  // Stand-in for a synthesised voice line.
+  const voice = path.join(fixturesDir, 'voice.wav');
+  if (!fs.existsSync(voice)) {
+    ffmpegOrThrow([
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', "sine=frequency=520:duration=2",
+      voice,
+    ]);
+  }
+
+  return { source, silentVertical, music, images, broll, voice };
 }
 
 export type MediaFacts = {

@@ -2,6 +2,7 @@ import { File } from 'expo-file-system';
 
 import type { AspectId } from '../types/project';
 import { uid } from '../utils/id';
+import { decodeBase64 } from '../utils/base64';
 import { mediaDir, toNativePath } from '../utils/paths';
 import { AiConfigError, AiRequestError, LLM_PROVIDERS, type LlmConfig } from './types';
 
@@ -150,34 +151,6 @@ function writeImage(base64: string): string {
   file.create({ overwrite: true });
   file.write(decodeBase64(base64));
   return toNativePath(file.uri);
-}
-
-const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-/**
- * React Native has no Buffer and its `atob` mangles binary, so the image bytes
- * are decoded directly into a Uint8Array.
- */
-function decodeBase64(input: string): Uint8Array {
-  const clean = input.replace(/[^A-Za-z0-9+/]/g, '');
-  const bytes = new Uint8Array(Math.floor((clean.length * 3) / 4));
-
-  let byteIndex = 0;
-  let accumulator = 0;
-  let bits = 0;
-
-  for (const character of clean) {
-    const value = BASE64_ALPHABET.indexOf(character);
-    if (value === -1) continue;
-    accumulator = (accumulator << 6) | value;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes[byteIndex++] = (accumulator >> bits) & 0xff;
-    }
-  }
-
-  return bytes.subarray(0, byteIndex);
 }
 
 async function readJson(response: Response): Promise<any> {

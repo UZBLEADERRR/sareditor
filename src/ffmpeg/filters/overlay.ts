@@ -72,6 +72,7 @@ export function overlayStage(options: {
   height: number;
   baseLabel: string;
   totalMs: number;
+  fps: number;
 }): OverlayStage {
   const parts: string[] = [];
   let current = options.baseLabel;
@@ -93,6 +94,9 @@ export function overlayStage(options: {
 
     const chain = [
       geometry.scale,
+      // A clip arrives at its own frame rate; matching the timeline keeps the
+      // composite from stuttering against the main video.
+      overlay.kind === 'video' ? `fps=${options.fps}` : null,
       'format=rgba',
       // Move the image's own timeline so t == the moment it should appear.
       `setpts=PTS-STARTPTS+${start}/TB`,
@@ -125,7 +129,23 @@ export function overlayStage(options: {
   return { parts, outLabel: current };
 }
 
-/** Input arguments for one overlay image, in overlay order. */
+/**
+ * Input arguments for the overlay media, in overlay order.
+ *
+ * A still is looped so it is available whenever `enable` turns it on; a B-roll
+ * clip is seeked and trimmed instead, because looping a video would restart it
+ * mid-shot.
+ */
 export function overlayInputArgs(overlays: ImageOverlay[], fps: number): string[] {
-  return overlays.flatMap((overlay) => ['-loop', '1', '-framerate', String(fps), '-i', overlay.uri]);
+  return overlays.flatMap((overlay) => {
+    if (overlay.kind === 'video') {
+      const seconds = Math.max(0.2, (overlay.endMs - overlay.startMs) / 1000);
+      return [
+        '-ss', toFfmpegSeconds(overlay.sourceStartMs ?? 0),
+        '-t', String(round(seconds, 3)),
+        '-i', overlay.uri,
+      ];
+    }
+    return ['-loop', '1', '-framerate', String(fps), '-i', overlay.uri];
+  });
 }

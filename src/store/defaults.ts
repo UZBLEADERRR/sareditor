@@ -85,6 +85,8 @@ export function createProject(name: string, platform: PlatformId = 'instagram_re
     audio: defaultAudioConfig(platform),
     export: exportConfigFor(platform),
     overlays: [],
+    library: [],
+    voiceovers: [],
     renders: [],
   };
 }

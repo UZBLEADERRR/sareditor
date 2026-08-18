@@ -6,6 +6,7 @@ import { gradeFilters, lutFilter } from './filters/grade';
 import { audioFadeFilters, bloomSegment, fadeFilters, grainFilter, letterboxFilter, sharpenFilter, chromaticFilter, vignetteFilter } from './filters/look';
 import { shakeStage, stabilizeTransformFilter, zoomStage } from './filters/motion';
 import { overlayInputArgs, overlayStage } from './filters/overlay';
+import { voiceDuckFilter, voiceInputArgs, voiceStage } from './filters/voice';
 import { audioEncoderArgs, containerArgs, encoderArgs, PLATFORM_PRESETS } from './presets';
 import { buildTimeline, mapBeatsToTimeline, mapWordsToTimeline, type Timeline } from './timeline';
 import { toFfmpegSeconds, round } from '../utils/format';
@@ -124,9 +125,11 @@ export function buildRender(options: BuildOptions): BuiltRender {
   if (music.loop && musicEnabled) inputs.push('-stream_loop', '-1');
   const musicInputIndex = musicEnabled ? 1 : -1;
 
-  // Overlay images are inputs too, and they come after the video and music.
+  // Overlay media and voice lines are inputs too, after the video and music.
   const overlays = (project.overlays ?? []).filter((item) => item.uri && item.endMs > item.startMs);
+  const voices = (project.voiceovers ?? []).filter((clip) => clip.uri && clip.durationMs > 0);
   const firstOverlayIndex = musicEnabled ? 2 : 1;
+  const firstVoiceIndex = firstOverlayIndex + overlays.length;
 
   const graphParts: string[] = [];
 
@@ -225,6 +228,7 @@ export function buildRender(options: BuildOptions): BuiltRender {
       height: config.height,
       baseLabel: graph.current,
       totalMs,
+      fps,
     });
     for (const part of stage.parts) graph.raw(part);
     graph.setLabel(stage.outLabel);
@@ -276,7 +280,9 @@ export function buildRender(options: BuildOptions): BuiltRender {
 
     const voiceChain = chain(
       audio.voiceEnhance ? voiceEnhanceFilters() : '',
-      volumeFilter(audio.originalVolumeDb)
+      volumeFilter(audio.originalVolumeDb),
+      // Narration sits on top of the original, so the original steps aside.
+      voiceDuckFilter(voices)
     );
     audioParts.push(`[${concatLabel}]${voiceChain || 'anull'}[voice]`);
     audioOut = 'voice';
@@ -310,6 +316,26 @@ export function buildRender(options: BuildOptions): BuiltRender {
     }
   }
 
+  if (voices.length) {
+    const stage = voiceStage(voices, firstVoiceIndex, totalMs);
+    audioParts.push(...stage.parts);
+
+    const inputs = audioOut ? [audioOut, ...stage.labels] : stage.labels;
+    if (inputs.length === 1) {
+      audioOut = inputs[0];
+    } else {
+      // With a base track first, `first` bounds the mix to the video's own
+      // length. Without one, the mix is nothing but delayed clips, and `first`
+      // would cut the track off at the end of the earliest line.
+      const duration = audioOut ? 'first' : 'longest';
+      audioParts.push(
+        `${inputs.map((label) => `[${label}]`).join('')}` +
+          `amix=inputs=${inputs.length}:duration=${duration}:dropout_transition=0:normalize=0[avoiced]`
+      );
+      audioOut = 'avoiced';
+    }
+  }
+
   if (audioOut) {
     const masterChain = chain(
       audio.normalizeLoudness ? loudnormFilter(audio.targetLufs) : '',
@@ -336,6 +362,7 @@ export function buildRender(options: BuildOptions): BuiltRender {
   }
 
   args.push(...overlayInputArgs(overlays, fps));
+  args.push(...voiceInputArgs(voices));
 
   args.push(
     '-filter_complex', filterComplex,

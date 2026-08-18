@@ -184,6 +184,19 @@ export type ExportConfig = {
   encoder: EncoderId;
 };
 
+/** Something the user imported for the AI to place: a photo or a B-roll clip. */
+export type MediaAsset = {
+  id: string;
+  kind: 'image' | 'video';
+  uri: string;
+  name: string;
+  durationMs: number;
+  width: number;
+  height: number;
+  /** What it shows, so the agent can decide where it belongs. */
+  note: string;
+};
+
 export type OverlayStyle = 'fullscreen' | 'cutaway' | 'corner';
 export type OverlayAnimation = 'none' | 'fade' | 'slide';
 
@@ -195,8 +208,14 @@ export type OverlayAnimation = 'none' | 'fade' | 'slide';
  */
 export type ImageOverlay = {
   id: string;
-  /** Local file path of the generated image. */
+  /** Local file path of the image, or of a B-roll clip. */
   uri: string;
+  /** Video B-roll is trimmed and muted; images are looped. */
+  kind?: 'image' | 'video';
+  /** Where to start inside a video asset. */
+  sourceStartMs?: number;
+  /** Set when this came from the user's library rather than generation. */
+  assetId?: string;
   startMs: number;
   endMs: number;
   /** The words this illustrates, kept so the user can see why it is here. */
@@ -231,6 +250,20 @@ export type AiPlan = {
   model: string;
 };
 
+/** A spoken line the app generated and mixed into the timeline. */
+export type VoiceClip = {
+  id: string;
+  uri: string;
+  text: string;
+  startMs: number;
+  durationMs: number;
+  volumeDb: number;
+  /** Provider and voice it came from, shown in the UI. */
+  voiceLabel: string;
+  /** Quietens the original audio underneath while this plays. */
+  duckOriginal: boolean;
+};
+
 export type RenderRecord = {
   id: string;
   uri: string;
@@ -255,6 +288,9 @@ export type Project = {
   audio: AudioConfig;
   export: ExportConfig;
   overlays: ImageOverlay[];
+  /** Media the user brought in for the agent to work with. */
+  library: MediaAsset[];
+  voiceovers: VoiceClip[];
   aiPlan?: AiPlan;
   /** Cached analysis so a re-render does not redo the expensive passes. */
   analysis?: {

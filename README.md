@@ -105,10 +105,14 @@ o‘rnatiladi; Play Store’ga chiqarish uchun o‘z keystore’ingizni ulashing
 Kerak: Node 22+, JDK 17, Android SDK (API 36), va bir marta — ffmpeg-kit AAR fayli.
 
 ```bash
-npm install
+npm install               # Skia native kutubxonalarini ham yuklaydi (postinstall)
 npm run ffmpeg:fetch      # ffmpeg-kit binarniklarini ./vendor/m2 ga yuklaydi
 npm run apk               # prebuild + gradlew assembleRelease
 ```
+
+Agar `npm ci --ignore-scripts` ishlatsangiz, Skia kutubxonalari yuklanmaydi —
+`npx install-skia` ni alohida chaqiring, aks holda CMake “Skia prebuilt binaries not found”
+deb to‘xtaydi.
 
 APK shu yerda: `android/app/build/outputs/apk/release/`.
 

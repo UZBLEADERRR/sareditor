@@ -26,6 +26,19 @@ export type FFmpegResult = {
 
 export type ProbeResult = { ok: boolean; json: string; logs: string };
 
+export type DeviceVoice = {
+  id: string;
+  language: string;
+  /** Android's own 1-500 quality score; higher is better. */
+  quality: number;
+  networkRequired: boolean;
+};
+
+export type SynthesisResult = {
+  path: string;
+  sizeBytes: number;
+};
+
 export type DeviceInfo = {
   abis: string[];
   sdkInt: number;
@@ -43,6 +56,13 @@ declare class SarFFmpegModule extends NativeModule<FFmpegModuleEvents> {
   cancelAll(): Promise<boolean>;
   probe(path: string): Promise<ProbeResult>;
   registerFontDirectories(dirs: string[], mapping: Record<string, string>): Promise<string[]>;
+  listSpeechVoices(): Promise<DeviceVoice[]>;
+  synthesizeSpeech(
+    text: string,
+    voiceId: string | null,
+    language: string | null,
+    outputPath: string
+  ): Promise<SynthesisResult>;
   deviceInfo(): DeviceInfo;
 }
 

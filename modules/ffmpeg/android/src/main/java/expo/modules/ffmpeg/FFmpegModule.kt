@@ -1,6 +1,9 @@
 package expo.modules.ffmpeg
 
 import android.os.Build
+import android.os.Bundle
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
 import com.arthenica.ffmpegkit.FFmpegSession
@@ -12,6 +15,7 @@ import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -19,6 +23,8 @@ private const val MAX_LOG_CHARS = 400_000
 
 class FFmpegSessionNotFound(key: String) :
   CodedException("ERR_FFMPEG_SESSION", "No running FFmpeg session with key '$key'", null)
+
+class SpeechFailed(message: String) : CodedException("ERR_TTS", message, null)
 
 /**
  * Thin, progress-aware bridge over ffmpeg-kit.
@@ -30,6 +36,7 @@ class FFmpegSessionNotFound(key: String) :
 class FFmpegModule : Module() {
   private val sessions = ConcurrentHashMap<String, FFmpegSession>()
   private val cancelled = ConcurrentHashMap<String, AtomicBoolean>()
+  private var tts: TextToSpeech? = null
 
   override fun definition() = ModuleDefinition {
     Name("SarFFmpeg")
@@ -47,6 +54,8 @@ class FFmpegModule : Module() {
       sessions.values.forEach { FFmpegKit.cancel(it.sessionId) }
       sessions.clear()
       cancelled.clear()
+      tts?.shutdown()
+      tts = null
     }
 
     /**
@@ -144,6 +153,74 @@ class FFmpegModule : Module() {
       existing
     }
 
+    /**
+     * Voices the device can speak with, offline and at no cost. The engine is
+     * whatever the user has installed, so the list differs between phones.
+     */
+    AsyncFunction("listSpeechVoices") { promise: Promise ->
+      withTts(promise) { engine ->
+        val voices = engine.voices.orEmpty()
+          .sortedBy { it.locale.toLanguageTag() }
+          .map { voice ->
+            mapOf(
+              "id" to voice.name,
+              "language" to voice.locale.toLanguageTag(),
+              "quality" to voice.quality,
+              "networkRequired" to voice.isNetworkConnectionRequired
+            )
+          }
+        promise.resolve(voices)
+      }
+    }
+
+    /**
+     * Speaks text into a WAV file so it can be mixed into the render.
+     *
+     * `TextToSpeech.speak` would only play it aloud; synthesising to a file is
+     * what makes an offline voiceover possible at all.
+     */
+    AsyncFunction("synthesizeSpeech") { text: String, voiceId: String?, language: String?, outputPath: String, promise: Promise ->
+      withTts(promise) { engine ->
+        language?.takeIf { it.isNotBlank() }?.let { engine.language = Locale.forLanguageTag(it) }
+        voiceId?.takeIf { it.isNotBlank() }?.let { id ->
+          engine.voices.orEmpty().firstOrNull { it.name == id }?.let { engine.voice = it }
+        }
+
+        val target = File(outputPath)
+        target.parentFile?.mkdirs()
+        if (target.exists()) target.delete()
+
+        val utteranceId = "sar_${System.nanoTime()}"
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+          override fun onStart(id: String?) = Unit
+
+          override fun onDone(id: String?) {
+            if (id != utteranceId) return
+            if (target.exists() && target.length() > 44) {
+              promise.resolve(mapOf("path" to target.absolutePath, "sizeBytes" to target.length().toDouble()))
+            } else {
+              promise.reject(SpeechFailed("Ovoz fayli yozilmadi"))
+            }
+          }
+
+          @Deprecated("Kept for API levels below 21")
+          override fun onError(id: String?) {
+            if (id == utteranceId) promise.reject(SpeechFailed("Qurilma ovozi xato berdi"))
+          }
+
+          override fun onError(id: String?, errorCode: Int) {
+            if (id == utteranceId) promise.reject(SpeechFailed("Qurilma ovozi xato berdi ($errorCode)"))
+          }
+        })
+
+        val params = Bundle().apply { putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId) }
+        val result = engine.synthesizeToFile(text, params, target, utteranceId)
+        if (result != TextToSpeech.SUCCESS) {
+          promise.reject(SpeechFailed("Qurilmada ovoz dvigateli topilmadi"))
+        }
+      }
+    }
+
     Function("deviceInfo") {
       mapOf(
         "abis" to Build.SUPPORTED_ABIS.toList(),
@@ -151,6 +228,31 @@ class FFmpegModule : Module() {
         "model" to Build.MODEL,
         "cores" to Runtime.getRuntime().availableProcessors()
       )
+    }
+  }
+
+  /** Brings the speech engine up once, then hands it to the caller. */
+  private fun withTts(promise: Promise, block: (TextToSpeech) -> Unit) {
+    val existing = tts
+    if (existing != null) {
+      block(existing)
+      return
+    }
+
+    val context = appContext.reactContext
+    if (context == null) {
+      promise.reject(SpeechFailed("Kontekst mavjud emas"))
+      return
+    }
+
+    var engine: TextToSpeech? = null
+    engine = TextToSpeech(context) { status ->
+      if (status == TextToSpeech.SUCCESS) {
+        tts = engine
+        block(engine!!)
+      } else {
+        promise.reject(SpeechFailed("Qurilmada ovoz dvigateli yo‘q"))
+      }
     }
   }
 }
