@@ -4,6 +4,8 @@ import React from 'react';
 import { Alert, Image, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { generateCopy } from '../../ai/director';
+import { AiChat } from './AiChat';
+import { AiLibrary } from './AiLibrary';
 import { Badge, Button, Card, Divider, Field, Hint, SectionTitle, Stat, ToggleRow } from '../../components/ui';
 import { GRADES } from '../../ffmpeg/filters/grade';
 import { PLATFORM_PRESETS } from '../../ffmpeg/presets';
@@ -20,7 +22,11 @@ export function AiPanel({ project }: { project: Project }) {
   const patchProject = useProjects((state) => state.patch);
   const setAiPlan = useProjects((state) => state.setAiPlan);
   const removeOverlay = useProjects((state) => state.removeOverlay);
+  const removeVoiceover = useProjects((state) => state.removeVoiceover);
+  const undoAiEdit = useProjects((state) => state.undoAiEdit);
   const settings = useSettings();
+
+  const aiEdits = project.aiEdits ?? [];
 
   const [running, setRunning] = React.useState(false);
   const [progress, setProgress] = React.useState<AutoEditProgress | null>(null);
@@ -93,6 +99,77 @@ export function AiPanel({ project }: { project: Project }) {
 
   return (
     <View>
+      <AiChat project={project} />
+
+      <AiLibrary project={project} />
+
+      {project.voiceovers.length ? (
+        <>
+          <SectionTitle>AI ovozlari</SectionTitle>
+          <Card padded={false}>
+            {project.voiceovers.map((clip) => (
+              <View key={clip.id} style={styles.overlayRow}>
+                <View style={styles.voiceIcon}>
+                  <Ionicons name="mic-outline" size={16} color={colors.accentSoft} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.overlayPhrase} numberOfLines={2}>
+                    {clip.text}
+                  </Text>
+                  <Text style={styles.overlayMeta}>
+                    {formatTimecode(clip.startMs)} · {formatDuration(clip.durationMs)} · {clip.voiceLabel}
+                  </Text>
+                </View>
+                <Pressable onPress={() => removeVoiceover(project.id, clip.id)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={17} color={colors.red} />
+                </Pressable>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      {aiEdits.length ? (
+        <>
+          <SectionTitle>AI tarixi</SectionTitle>
+          <Card padded={false}>
+            {aiEdits.map((edit) => (
+              <View key={edit.id} style={styles.historyRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.overlayPhrase} numberOfLines={2}>
+                    {edit.instruction}
+                  </Text>
+                  <Text style={styles.overlayMeta}>
+                    {edit.changes.length
+                      ? `${edit.changes.length} ta o‘zgarish · ${new Date(edit.createdAt).toLocaleTimeString()}`
+                      : new Date(edit.createdAt).toLocaleTimeString()}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() =>
+                    Alert.alert('Ortga qaytarish', 'Shu buyruqdan keyingi hamma AI o‘zgarishi bekor qilinadi.', [
+                      { text: 'Bekor qilish', style: 'cancel' },
+                      {
+                        text: 'Qaytarish',
+                        style: 'destructive',
+                        onPress: () => undoAiEdit(project.id, edit.id),
+                      },
+                    ])
+                  }
+                  hitSlop={8}
+                  style={styles.historyUndo}
+                >
+                  <Ionicons name="arrow-undo-outline" size={14} color={colors.textDim} />
+                  <Text style={styles.historyUndoText}>Qaytarish</Text>
+                </Pressable>
+              </View>
+            ))}
+          </Card>
+          <Hint>Har bir qatorda o‘sha buyruqdan oldingi holat saqlangan.</Hint>
+        </>
+      ) : null}
+
+      <SectionTitle>Bir tugmada to‘liq montaj</SectionTitle>
       <View style={styles.hero}>
         <LinearGradient
           colors={gradients.brandWide}
@@ -329,8 +406,28 @@ function Step({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 }
 
 const styles = StyleSheet.create({
+  voiceIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.pill,
+    backgroundColor: `${colors.accent}1A`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSoft,
+  },
+  historyUndo: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  historyUndoText: { ...typography.tiny, color: colors.textDim },
+
   hero: {
-    marginTop: spacing.lg,
+    marginTop: spacing.sm,
     borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,

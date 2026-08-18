@@ -8,7 +8,10 @@ import { listImageModels, listLlmModels, listSttModels, type ModelOption } from 
 import { useBrand } from '../brand';
 import { completeText } from '../ai/providers/llm';
 import { LLM_PROVIDERS, STT_PROVIDERS, type LlmProviderId, type SttProviderId } from '../ai/types';
+import { VOICE_PROVIDERS, listVoices, synthesize, type VoiceOption, type VoiceProviderId } from '../ai/voice';
 import { Badge, Button, Card, ChipRow, Divider, Field, Hint, IconButton, SectionTitle, ToggleRow } from '../components/ui';
+import { createAudioPlayer } from 'expo-audio';
+
 import { deviceInfo } from '../ffmpeg/engine';
 import { PLATFORM_ORDER, PLATFORM_PRESETS } from '../ffmpeg/presets';
 import { sttKeyIsShared, useSettings } from '../store/settings';
@@ -24,6 +27,7 @@ export function SettingsScreen() {
   const brand = useBrand();
 
   const [testing, setTesting] = React.useState(false);
+  const [voiceTesting, setVoiceTesting] = React.useState(false);
   const [cacheBytes, setCacheBytes] = React.useState(0);
 
   React.useEffect(() => {
@@ -33,6 +37,27 @@ export function SettingsScreen() {
   const llmInfo = LLM_PROVIDERS[settings.llmProvider];
   const sttInfo = STT_PROVIDERS[settings.sttProvider];
   const sharedKey = sttKeyIsShared(settings);
+  const voiceInfo = VOICE_PROVIDERS[settings.voiceProvider];
+
+  /**
+   * Speaks one line and plays it back.
+   *
+   * Synthesising alone would only prove the request succeeded; hearing it is
+   * the only way to know the chosen voice is the one the creator wanted.
+   */
+  const testVoice = async () => {
+    setVoiceTesting(true);
+    try {
+      const sample = await synthesize(settings.voiceConfig(), 'Fara Editor — ovoz tayyor.');
+      const player = createAudioPlayer({ uri: toFileUri(sample.uri) });
+      player.play();
+      setTimeout(() => player.remove(), Math.max(2000, sample.durationMs + 500));
+    } catch (error) {
+      Alert.alert('Ovoz chiqmadi', (error as Error).message);
+    } finally {
+      setVoiceTesting(false);
+    }
+  };
 
   const testConnection = async () => {
     setTesting(true);
@@ -221,6 +246,60 @@ export function SettingsScreen() {
             onChangeText={(value) => settings.update({ sttLanguage: value.trim().toLowerCase() })}
             placeholder="uz, ru, en …"
             hint="Bo‘sh qoldirsangiz model tilni o‘zi aniqlaydi. Til ko‘rsatilsa aniqlik oshadi."
+          />
+        </Card>
+
+        <SectionTitle>Ovoz (AI gapirishi)</SectionTitle>
+        <Card>
+          <ChipRow<VoiceProviderId>
+            options={(Object.keys(VOICE_PROVIDERS) as VoiceProviderId[]).map((id) => ({
+              value: id,
+              label: VOICE_PROVIDERS[id].label,
+            }))}
+            value={settings.voiceProvider}
+            onChange={settings.setVoiceProvider}
+          />
+          <Hint style={{ marginBottom: spacing.md }}>{voiceInfo.hint}</Hint>
+
+          {voiceInfo.needsKey ? (
+            <Field
+              label="API kalit"
+              value={settings.voiceApiKey}
+              onChangeText={(value) => settings.setVoiceApiKey(value)}
+              placeholder={
+                settings.voiceProvider === 'elevenlabs' ? 'sk_...' : 'bo‘sh qoldirsangiz AI kaliti ishlatiladi'
+              }
+              secure
+            />
+          ) : null}
+
+          {settings.voiceProvider === 'gemini' ? (
+            <Field
+              label="Ovoz modeli"
+              value={settings.voiceModel}
+              onChangeText={(value) => settings.update({ voiceModel: value.trim() })}
+              placeholder="gemini-…-tts"
+              hint="Gemini’ning ovoz chiqaradigan modeli nomini kiriting."
+            />
+          ) : null}
+
+          <VoicePicker />
+
+          <Field
+            label="Til (ixtiyoriy)"
+            value={settings.voiceLanguage}
+            onChangeText={(value) => settings.update({ voiceLanguage: value.trim() })}
+            placeholder="uz-UZ, en-US, ru-RU …"
+            hint="Telefon ovozi uchun tilni ko‘rsatsangiz, o‘sha tildagi ovoz tanlanadi."
+          />
+
+          <Button
+            label="Ovozni sinab ko‘rish"
+            icon="volume-high-outline"
+            variant="secondary"
+            onPress={testVoice}
+            loading={voiceTesting}
+            disabled={!settings.isVoiceReady()}
           />
         </Card>
 
@@ -422,6 +501,77 @@ function ModelPicker({
         <Pressable onPress={() => setManual(true)} hitSlop={6}>
           <Text style={styles.manualLink}>Model nomini qo‘lda kiritish</Text>
         </Pressable>
+      )}
+    </View>
+  );
+}
+
+/**
+ * Voice chooser.
+ *
+ * Only the device engine and ElevenLabs publish a real catalogue, so for the
+ * others the field stays free text rather than showing a list of names this app
+ * guessed at. An invented voice id fails at synthesis time, which is a worse
+ * place to find out.
+ */
+function VoicePicker() {
+  const settings = useSettings();
+  const [loading, setLoading] = React.useState(false);
+
+  const provider = settings.voiceProvider;
+  const options: VoiceOption[] = settings.voiceOptions;
+  const catalogued = provider === 'device' || provider === 'elevenlabs';
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const voices = await listVoices(settings.voiceConfig());
+      settings.setVoiceOptions(voices);
+      if (!voices.length) {
+        Alert.alert('Ovoz topilmadi', 'Ro‘yxat bo‘sh. Ovoz nomini qo‘lda kiriting.');
+        return;
+      }
+      if (!settings.voiceId || !voices.some((voice) => voice.id === settings.voiceId)) {
+        settings.update({ voiceId: voices[0].id });
+      }
+    } catch (error) {
+      Alert.alert('Ovozlar yuklanmadi', (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={styles.picker}>
+      <View style={styles.pickerHeader}>
+        <Text style={styles.fieldLabel}>Ovoz</Text>
+        <View style={styles.pickerActions}>
+          {options.length ? <Badge label={`${options.length} ta`} color={colors.teal} /> : null}
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.accentSoft} />
+          ) : catalogued ? (
+            <Pressable onPress={load} hitSlop={8}>
+              <Text style={styles.pickerAction}>{options.length ? 'Yangilash' : 'Yuklash'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
+      {options.length ? (
+        <ChipRow
+          options={options.map((voice) => ({ value: voice.id, label: voice.label }))}
+          value={settings.voiceId}
+          onChange={(voiceId) => settings.update({ voiceId })}
+        />
+      ) : catalogued ? (
+        <Hint>Ro‘yxat hali yuklanmagan.</Hint>
+      ) : (
+        <Field
+          label="Ovoz nomi"
+          value={settings.voiceId}
+          onChangeText={(voiceId) => settings.update({ voiceId: voiceId.trim() })}
+          placeholder={provider === 'openai' ? 'alloy, nova, onyx …' : 'provayder bergan ovoz nomi'}
+        />
       )}
     </View>
   );

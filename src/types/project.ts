@@ -264,6 +264,36 @@ export type VoiceClip = {
   duckOriginal: boolean;
 };
 
+/** The parts of a project the agent is allowed to touch. */
+export type AiSnapshot = {
+  segments: Segment[];
+  subtitle: SubtitleConfig;
+  music: MusicConfig;
+  effects: EffectsConfig;
+  audio: AudioConfig;
+  export: ExportConfig;
+  overlays: ImageOverlay[];
+  voiceovers: VoiceClip[];
+  transcript?: Transcript;
+};
+
+/**
+ * One agent run, kept so everything it did can be taken back.
+ *
+ * The snapshot is of the state *before* the run, which makes undo exact rather
+ * than a guess at inverse operations — the agent can rewrite the whole cut in
+ * one turn, and reversing that by replaying opposites would never be reliable.
+ */
+export type AiEdit = {
+  id: string;
+  createdAt: number;
+  /** What the creator asked for, shown in the history list. */
+  instruction: string;
+  summary: string;
+  changes: string[];
+  before: AiSnapshot;
+};
+
 export type RenderRecord = {
   id: string;
   uri: string;
@@ -292,6 +322,8 @@ export type Project = {
   library: MediaAsset[];
   voiceovers: VoiceClip[];
   aiPlan?: AiPlan;
+  /** Newest first. Undoing one also drops the runs made after it. */
+  aiEdits?: AiEdit[];
   /** Cached analysis so a re-render does not redo the expensive passes. */
   analysis?: {
     silences?: { startMs: number; endMs: number }[];

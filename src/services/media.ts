@@ -6,7 +6,7 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Directory, File } from 'expo-file-system';
 
 import { probe } from '../ffmpeg/engine';
-import type { SourceClip } from '../types/project';
+import type { MediaAsset, SourceClip } from '../types/project';
 import { uid } from '../utils/id';
 import { safeFileName } from '../ffmpeg/filters/escape';
 import { fontsDir, mediaDir, toFileUri, toNativePath } from '../utils/paths';
@@ -79,6 +79,53 @@ export async function describeVideo(uri: string, name: string): Promise<SourceCl
     rotation: info.rotation,
     sizeBytes: file.exists ? file.size ?? info.sizeBytes : info.sizeBytes,
   };
+}
+
+/**
+ * Photos and clips the creator brings in for the agent to place.
+ *
+ * These never become the main footage — they are cutaways, so they are probed
+ * for size and duration and left alone otherwise. The note is filled in by the
+ * creator afterwards; it is the only thing that tells the agent what a picture
+ * actually shows.
+ */
+export async function pickLibraryAssets(): Promise<MediaAsset[]> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    throw new Error('Galereyaga ruxsat berilmadi. Sozlamalardan ruxsat bering.');
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images', 'videos'],
+    allowsMultipleSelection: true,
+    selectionLimit: 12,
+    quality: 1,
+    videoExportPreset: ImagePicker.VideoExportPreset.Passthrough,
+  });
+  if (result.canceled || !result.assets?.length) return [];
+
+  const assets: MediaAsset[] = [];
+  for (const picked of result.assets) {
+    const name = picked.fileName ?? `media_${uid()}`;
+    const localUri = picked.uri.startsWith('content://')
+      ? await copyIntoApp(picked.uri, mediaDir(), name)
+      : picked.uri;
+
+    const info = await probe(localUri).catch(() => null);
+    const isVideo = picked.type === 'video' || (info?.durationMs ?? 0) > 0;
+
+    assets.push({
+      id: uid('asset_'),
+      kind: isVideo ? 'video' : 'image',
+      uri: toNativePath(localUri),
+      name,
+      durationMs: info?.durationMs ?? 0,
+      width: info?.width || picked.width || 0,
+      height: info?.height || picked.height || 0,
+      note: '',
+    });
+  }
+  return assets;
 }
 
 export type PickedAudio = {

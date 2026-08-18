@@ -2,9 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
 import { exportConfigFor } from '../ffmpeg/presets';
+import { uid } from '../utils/id';
 import type {
+  AiEdit,
   AiPlan,
+  AiSnapshot,
   ImageOverlay,
+  MediaAsset,
   AudioConfig,
   EffectsConfig,
   ExportConfig,
@@ -13,6 +17,7 @@ import type {
   Project,
   RenderRecord,
   Segment,
+  VoiceClip,
   SourceClip,
   SubtitleConfig,
   Transcript,
@@ -42,6 +47,18 @@ type ProjectsState = {
   setOverlays: (id: string, overlays: ImageOverlay[]) => void;
   removeOverlay: (id: string, overlayId: string) => void;
   updateOverlay: (id: string, overlayId: string, patch: Partial<ImageOverlay>) => void;
+  addLibraryAssets: (id: string, assets: MediaAsset[]) => void;
+  removeLibraryAsset: (id: string, assetId: string) => void;
+  updateLibraryAsset: (id: string, assetId: string, patch: Partial<MediaAsset>) => void;
+  setVoiceovers: (id: string, voiceovers: VoiceClip[]) => void;
+  removeVoiceover: (id: string, voiceId: string) => void;
+  /** Returns the id of the recorded run, so the chat can offer an undo button. */
+  applyAiEdit: (
+    id: string,
+    patch: Partial<Project>,
+    meta: { instruction: string; summary: string; changes: string[] }
+  ) => string;
+  undoAiEdit: (id: string, editId: string) => void;
   updateSubtitle: (id: string, patch: Partial<SubtitleConfig>) => void;
   updateMusic: (id: string, patch: Partial<MusicConfig>) => void;
   updateEffects: (id: string, patch: Partial<EffectsConfig>) => void;
@@ -130,6 +147,67 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       ),
     })),
 
+  addLibraryAssets: (id, assets) =>
+    applyPatch(set, get, id, (project) => ({ library: [...project.library, ...assets] })),
+
+  removeLibraryAsset: (id, assetId) =>
+    applyPatch(set, get, id, (project) => ({
+      library: project.library.filter((asset) => asset.id !== assetId),
+      // An overlay pointing at a deleted file would render as a black hole.
+      overlays: project.overlays.filter((overlay) => overlay.assetId !== assetId),
+    })),
+
+  updateLibraryAsset: (id, assetId, patch) =>
+    applyPatch(set, get, id, (project) => ({
+      library: project.library.map((asset) =>
+        asset.id === assetId ? { ...asset, ...patch } : asset
+      ),
+    })),
+
+  setVoiceovers: (id, voiceovers) => applyPatch(set, get, id, () => ({ voiceovers })),
+
+  removeVoiceover: (id, voiceId) =>
+    applyPatch(set, get, id, (project) => ({
+      voiceovers: project.voiceovers.filter((clip) => clip.id !== voiceId),
+    })),
+
+  /**
+   * Applies an agent run and records what the project looked like beforehand.
+   *
+   * The snapshot is taken here rather than in the agent so it cannot drift:
+   * whatever is in the store at this instant is exactly what undo restores.
+   */
+  applyAiEdit: (id, patch, meta) => {
+    const editId = uid('aiedit_');
+    applyPatch(set, get, id, (project) => {
+      const edit: AiEdit = {
+        id: editId,
+        createdAt: Date.now(),
+        instruction: meta.instruction,
+        summary: meta.summary,
+        changes: meta.changes,
+        before: snapshot(project),
+      };
+      return { ...patch, aiEdits: [edit, ...(project.aiEdits ?? [])].slice(0, 10) };
+    });
+    return editId;
+  },
+
+  /**
+   * Puts the project back to just before an agent run.
+   *
+   * Runs made after it go too — they were built on top of state that is about
+   * to disappear, so keeping them would let a later undo restore a mixture of
+   * two different histories.
+   */
+  undoAiEdit: (id, editId) =>
+    applyPatch(set, get, id, (project) => {
+      const edits = project.aiEdits ?? [];
+      const index = edits.findIndex((edit) => edit.id === editId);
+      if (index < 0) return {};
+      return { ...edits[index].before, aiEdits: edits.slice(index + 1) };
+    }),
+
   updateSubtitle: (id, patch) =>
     applyPatch(set, get, id, (project) => ({ subtitle: { ...project.subtitle, ...patch } })),
 
@@ -172,6 +250,20 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       renders: project.renders.filter((render) => render.id !== renderId),
     })),
 }));
+
+function snapshot(project: Project): AiSnapshot {
+  return {
+    segments: project.segments,
+    subtitle: project.subtitle,
+    music: project.music,
+    effects: project.effects,
+    audio: project.audio,
+    export: project.export,
+    overlays: project.overlays,
+    voiceovers: project.voiceovers,
+    transcript: project.transcript,
+  };
+}
 
 type SetState = (partial: Partial<ProjectsState> | ((state: ProjectsState) => Partial<ProjectsState>)) => void;
 

@@ -56,7 +56,8 @@
     "apk": "npm run ffmpeg:fetch && expo prebuild --platform android --no-install && cd android && ./gradlew assembleRelease",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "tsx tests/run.ts"
+    "test": "tsx tests/run.ts",
+    "test:agent": "tsx tests/run-agent-only.ts"
   },
   "private": true
 }

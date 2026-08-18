@@ -1,4 +1,12 @@
-import type { GradeId, OverlayStyle, SubtitleStyleId, TransitionId } from '../types/project';
+import type {
+  AspectId,
+  FillMode,
+  GradeId,
+  OverlayStyle,
+  PlatformId,
+  SubtitleStyleId,
+  TransitionId,
+} from '../types/project';
 
 /** JSON-schema fragment shared by both provider dialects. */
 export type ToolSchema = {
@@ -23,6 +31,11 @@ const TRANSITIONS: TransitionId[] = [
   'none', 'fade', 'dissolve', 'flash', 'slideup', 'slideleft', 'circleopen', 'pixelize', 'wipeleft',
 ];
 const OVERLAY_STYLES: OverlayStyle[] = ['cutaway', 'fullscreen', 'corner'];
+const PLATFORMS: PlatformId[] = [
+  'instagram_reels', 'instagram_feed', 'tiktok', 'youtube_shorts', 'youtube',
+];
+const ASPECTS: AspectId[] = ['9:16', '4:5', '1:1', '16:9'];
+const FILL_MODES: FillMode[] = ['crop', 'blurPad', 'fit'];
 
 const range = {
   startMs: { type: 'integer', description: 'Start in milliseconds, measured on the original video' },
@@ -198,6 +211,23 @@ export const AGENT_TOOLS: AgentToolSpec[] = [
         musicVolumeDb: { type: 'number' },
         duckMusic: { type: 'boolean', description: 'Lower the music while someone speaks' },
         voiceEnhance: { type: 'boolean' },
+      },
+    },
+  },
+  {
+    name: 'set_format',
+    description:
+      'Change the output format — the platform preset, the aspect ratio, or how the frame is filled.',
+    parameters: {
+      type: 'object',
+      properties: {
+        platform: { type: 'string', enum: PLATFORMS },
+        aspect: { type: 'string', enum: ASPECTS },
+        fillMode: {
+          type: 'string',
+          enum: FILL_MODES,
+          description: 'crop fills the frame, blurPad adds a blurred background, fit keeps black bars',
+        },
       },
     },
   },

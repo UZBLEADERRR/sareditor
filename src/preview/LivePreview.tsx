@@ -28,6 +28,7 @@ import { clamp, formatTimecode } from '../utils/format';
 import { toFileUri } from '../utils/paths';
 import { layoutCaption } from './captionLayout';
 import { gradeColorMatrix } from './colorMatrix';
+import { gainFromDb, useMixPlayback } from './useMixPlayback';
 import {
   buildCues,
   captionAt,
@@ -103,6 +104,14 @@ export function LivePreview({
   React.useEffect(() => {
     paused.value = !playing;
   }, [playing, paused]);
+
+  // The mix is live too: muting the original, changing the music level or
+  // adding a voice line is audible immediately, without a render.
+  React.useEffect(() => {
+    volume.value = project.audio.muteOriginal ? 0 : gainFromDb(project.audio.originalVolumeDb);
+  }, [project.audio.muteOriginal, project.audio.originalVolumeDb, volume]);
+
+  useMixPlayback({ project, playing, outputMs });
 
   const video = useVideo(source ? toFileUri(source.uri) : null, {
     paused,
