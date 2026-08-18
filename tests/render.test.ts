@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { stabilizeDetectArgs } from '../src/ffmpeg/filters/motion';
+import { needsProxy, proxyArgs } from '../src/ffmpeg/proxy';
 import { buildRender } from '../src/ffmpeg/pipeline';
 import { buildAss } from '../src/ffmpeg/subtitles';
 import { buildTimeline } from '../src/ffmpeg/timeline';
@@ -94,6 +95,50 @@ export function runRenderTests(runner: Runner): void {
     normalised.integratedLufs !== null && Math.abs(normalised.integratedLufs + 14) < 2,
     `${normalised.integratedLufs} LUFS`
   );
+
+  runner.section('Playback proxy');
+
+  // The editor hands the preview decoder this file instead of the original.
+  // A phone-camera clip is 4K and high bitrate; feeding that to the frame
+  // decoder is what takes the app down, so the re-encode has to actually work.
+  runner.check('a 4K clip needs a proxy', needsProxy({ width: 2160, height: 3840 }));
+  runner.check('a 720p clip does not', !needsProxy({ width: 720, height: 1280 }));
+
+  try {
+    const big = path.join(outputDir, 'proxy-source.mp4');
+    ffmpeg([
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', 'testsrc2=size=2160x3840:rate=30:duration=3',
+      '-f', 'lavfi', '-i', 'sine=frequency=300:duration=3',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-shortest', big,
+    ]);
+
+    const proxy = path.join(outputDir, 'proxy-out.mp4');
+    const { ok, stderr } = ffmpeg(
+      proxyArgs({ uri: big, width: 2160, height: 3840, hasAudio: true }, proxy)
+    );
+    runner.check('the proxy encodes', ok, ok ? '' : stderr.trim().split('\n').slice(-2).join(' '));
+
+    const facts = inspect(proxy);
+    runner.check(
+      'a portrait clip is scaled down on its short side',
+      facts.width === 720 && facts.height === 1280,
+      `${facts.width}x${facts.height}`
+    );
+    runner.check('the proxy keeps its audio', facts.hasAudio);
+    runner.check(
+      'the proxy is far smaller than the original',
+      fs.statSync(proxy).size * 10 < fs.statSync(big).size,
+      `${(fs.statSync(proxy).size / 1e6).toFixed(2)} MB from ${(fs.statSync(big).size / 1e6).toFixed(1)} MB`
+    );
+    runner.check(
+      'the proxy is baseline H.264, which every Android decoder handles',
+      /Baseline/i.test(ffmpeg(['-hide_banner', '-i', proxy, '-f', 'null', '-']).stderr),
+    );
+  } catch (error) {
+    runner.check('playback proxy', false, (error as Error).message);
+  }
 
   runner.section('Stabilisation (two pass)');
 

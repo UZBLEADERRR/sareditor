@@ -16,7 +16,14 @@ import {
   type SkFont,
 } from '@shopify/react-native-skia';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 
@@ -59,6 +66,8 @@ type Props = {
   onMoveOverlay?: (id: string, position: { xPct: number; yPct: number }) => void;
   /** Turns off editing handles, e.g. while a render is running. */
   locked?: boolean;
+  /** The playback copy is still being built. */
+  preparing?: boolean;
 };
 
 /**
@@ -84,6 +93,7 @@ export function LivePreview({
   onMoveCaption,
   onMoveOverlay,
   locked,
+  preparing,
 }: Props) {
   const source = project.source;
   const config = project.export;
@@ -113,7 +123,11 @@ export function LivePreview({
 
   useMixPlayback({ project, playing, outputMs });
 
-  const video = useVideo(source ? toFileUri(source.uri) : null, {
+  // Always the proxy when one exists: the original may be 4K HEVC, which is
+  // more than the frame decoder can safely handle.
+  const playbackUri = source ? (source.previewUri ?? source.uri) : null;
+
+  const video = useVideo(playbackUri ? toFileUri(playbackUri) : null, {
     paused,
     seek,
     looping: false,
@@ -369,7 +383,12 @@ export function LivePreview({
             </View>
           ) : null}
 
-          {!playing ? (
+          {preparing ? (
+            <View pointerEvents="none" style={styles.preparing}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.preparingText}>Video tayyorlanmoqda…</Text>
+            </View>
+          ) : !playing ? (
             <View pointerEvents="none" style={styles.playBadgeWrap}>
               <View style={styles.playBadge}>
                 <Ionicons name="play" size={22} color="#fff" />
@@ -605,6 +624,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  preparing: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(6,6,10,0.55)',
+  },
+  preparingText: { ...typography.tiny, color: '#fff' },
 
   selectionHint: {
     position: 'absolute',

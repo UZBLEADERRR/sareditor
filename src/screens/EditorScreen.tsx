@@ -14,6 +14,7 @@ import { buildTimeline, outputToSource, sourceToOutput } from '../ffmpeg/timelin
 import { LivePreview } from '../preview/LivePreview';
 import type { RootStackParamList } from '../navigation';
 import { generateThumbnails } from '../services/media';
+import { buildPreviewProxy } from '../services/proxy';
 import { useProjects } from '../store/projects';
 import { colors, radius, spacing, typography } from '../theme';
 import { AiChat } from './panels/AiChat';
@@ -81,22 +82,49 @@ export function EditorScreen() {
   const [playing, setPlaying] = React.useState(false);
   const [fullscreen, setFullscreen] = React.useState(false);
   const [thumbnails, setThumbnails] = React.useState<(string | null)[]>([]);
+  const [preparing, setPreparing] = React.useState(false);
 
   const source = project?.source;
+  // `attachSource` restarts the project; recording the proxy path must not
+  // throw away the cut, the transcript or anything else already done.
+  const patchProject = useProjects((state) => state.patch);
 
+  // The preview and the film strip both read the proxy, never the original.
+  // Building it before either one touches the file is the whole point: a 4K
+  // clip handed to the frame decoder can bring the process down.
   React.useEffect(() => {
-    if (!source) return undefined;
+    if (!source || !projectId) return undefined;
     let cancelled = false;
-    const step = source.durationMs / (THUMBNAIL_COUNT + 1);
-    const times = Array.from({ length: THUMBNAIL_COUNT }, (_, index) => step * (index + 1));
 
-    generateThumbnails(source.uri, times).then((result) => {
+    (async () => {
+      let playbackUri = source.previewUri;
+
+      if (!playbackUri) {
+        setPreparing(true);
+        try {
+          playbackUri = await buildPreviewProxy(source);
+          if (cancelled) return;
+          if (playbackUri !== source.uri) {
+            patchProject(projectId, { source: { ...source, previewUri: playbackUri } });
+          }
+        } catch {
+          playbackUri = source.uri;
+        } finally {
+          if (!cancelled) setPreparing(false);
+        }
+      }
+
+      if (cancelled) return;
+      const step = source.durationMs / (THUMBNAIL_COUNT + 1);
+      const times = Array.from({ length: THUMBNAIL_COUNT }, (_, index) => step * (index + 1));
+      const result = await generateThumbnails(playbackUri ?? source.uri, times);
       if (!cancelled) setThumbnails(result);
-    });
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [source, projectId, patchProject]);
 
   if (!project) {
     return (
@@ -146,6 +174,7 @@ export function EditorScreen() {
   const preview = (
     <LivePreview
       project={project}
+      preparing={preparing}
       playing={playing}
       onPlayingChange={setPlaying}
       outputMs={playheadMs}

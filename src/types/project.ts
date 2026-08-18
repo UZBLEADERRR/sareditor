@@ -19,6 +19,15 @@ export type SourceClip = {
   /** Rotation metadata in degrees; 90/270 means width/height are swapped on screen. */
   rotation: number;
   sizeBytes: number;
+  /**
+   * Small, plainly-encoded copy used for on-screen playback and thumbnails.
+   *
+   * Phone cameras produce 4K HEVC at high bitrates, and handing that straight
+   * to the preview decoder is the fastest way to take the whole app down. The
+   * export always reads the original; only what is drawn on screen comes from
+   * here.
+   */
+  previewUri?: string;
 };
 
 /** A slice of the source that survives into the final cut. */
