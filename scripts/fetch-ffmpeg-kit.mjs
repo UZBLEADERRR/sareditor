@@ -3,14 +3,13 @@
  * Downloads the ffmpeg-kit Android AAR into a small local Maven repository at
  * ./vendor/m2, which plugins/withFFmpegKit.js registers with Gradle.
  *
- * Why this exists: Arthenica retired ffmpeg-kit in 2025 and removed the
- * `com.arthenica:ffmpeg-kit-*` artifacts from Maven Central, so there is no
- * longer a repository Gradle can resolve them from. The binaries themselves are
- * still redistributable (LGPL-3.0, or GPL-3.0 for the `-gpl` variants), they
- * just have to be mirrored.
+ * Why this exists: the coordinates live under a group that ships the AAR but
+ * no Gradle-module metadata we want Gradle chasing, and CI needs the binary
+ * cached before `expo prebuild` runs. See ffmpeg-kit.sources.json for why we
+ * link against the community fork rather than the retired com.arthenica build.
  *
  *   npm run ffmpeg:fetch
- *   FFMPEG_KIT_AAR_URL=https://my-mirror/ffmpeg-kit-full-gpl-6.0-2.aar npm run ffmpeg:fetch
+ *   FFMPEG_KIT_AAR_URL=https://my-mirror/ffmpeg-kit-full-gpl-2.2.1.aar npm run ffmpeg:fetch
  */
 import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -22,18 +21,25 @@ import { pipeline } from 'node:stream/promises';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(await fs.readFile(path.join(root, 'ffmpeg-kit.sources.json'), 'utf8'));
 
+const groupId = process.env.FFMPEG_KIT_GROUP || config.groupId;
 const variant = process.env.FFMPEG_KIT_VARIANT || config.variant;
 const version = process.env.FFMPEG_KIT_VERSION || config.version;
 const artifactId = `ffmpeg-kit-${variant}`;
 const fileName = `${artifactId}-${version}.aar`;
+const groupPath = groupId.split('.').join('/');
 
-const outDir = path.join(root, 'vendor', 'm2', 'com', 'arthenica', artifactId, version);
+const outDir = path.join(root, 'vendor', 'm2', ...groupId.split('.'), artifactId, version);
 const aarPath = path.join(outDir, fileName);
 const pomPath = path.join(outDir, `${artifactId}-${version}.pom`);
 
 const candidates = [
   process.env.FFMPEG_KIT_AAR_URL,
-  ...config.mirrors.map((m) => m.replaceAll('{variant}', variant).replaceAll('{version}', version)),
+  ...config.mirrors.map((m) =>
+    m
+      .replaceAll('{groupPath}', groupPath)
+      .replaceAll('{variant}', variant)
+      .replaceAll('{version}', version)
+  ),
 ].filter(Boolean);
 
 /** An AAR is a zip; anything that starts with something else is an error page. */
@@ -109,23 +115,15 @@ async function main() {
   process.exit(1);
 }
 
-/** Minimal POM so Gradle can resolve the artifact and its one transitive dep. */
+/** Minimal POM so Gradle can resolve the artifact. */
 async function writePom() {
   const pom = `<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>com.arthenica</groupId>
+  <groupId>${groupId}</groupId>
   <artifactId>${artifactId}</artifactId>
   <version>${version}</version>
   <packaging>aar</packaging>
-  <dependencies>
-    <dependency>
-      <groupId>com.arthenica</groupId>
-      <artifactId>smart-exception-java</artifactId>
-      <version>0.2.1</version>
-      <scope>compile</scope>
-    </dependency>
-  </dependencies>
 </project>
 `;
   await fs.writeFile(pomPath, pom, 'utf8');

@@ -158,34 +158,42 @@ npx expo run:android
 
 ### ffmpeg-kit binarniklari haqida
 
-Arthenica 2025-yilda `ffmpeg-kit` loyihasini yopdi va `com.arthenica:ffmpeg-kit-*` artefaktlarini
-Maven Central’dan olib tashladi. Binarniklarning o‘zi tarqatiladi (LGPL-3.0, `-gpl` variantlari
-uchun GPL-3.0), faqat ularni endi qo‘lda ko‘chirish kerak.
+Arthenica 2025-yilda `ffmpeg-kit` loyihasini yopdi. Uning `com.arthenica:ffmpeg-kit-*`
+artefaktlari Maven Central’dan olib tashlangan va — bundan ham muhimi — 4 KB sahifa hajmiga
+moslangan holda yig‘ilgan. Android 15 va undan yuqori qurilmalar 16 KB sahifa bilan ishlaydi,
+ular esa bunday `.so` fayllarni umuman yuklamaydi: ilova ffmpeg’ga birinchi murojaat qilgan
+zahoti yopilib qoladi (masalan video yuklaganda).
 
-`npm run ffmpeg:fetch` ularni `ffmpeg-kit.sources.json` dagi mirror’lardan qidiradi va
-`./vendor/m2` ichida kichik Maven repozitoriysi yasaydi. Ro‘yxatdagi birinchi manzil —
-Google’ning Maven Central GCS mirror’i; undan keyin Huawei va Aliyun keladi. Skript yuklangan
-faylning zip sarlavhasini tekshiradi, shuning uchun 200 qaytarib xato sahifa bergan mirror
-o‘tkazib yuboriladi.
+Shuning uchun loyiha jamoaviy davomchi build’ga ulanadi:
 
-Agar bir kun bu manzillar ham o‘lsa, `node scripts/probe-ffmpeg-mirrors.mjs` tirik manbalarni
-qayta topadi (tarmog‘i ochiq mashinada yoki CI’da ishga tushiring). Yoki to‘g‘ridan-to‘g‘ri:
+    com.antonkarpenko:ffmpeg-kit-full-gpl:2.2.1     (FFmpeg 8.1.1, NDK r27+)
+
+API bir xil, faqat paket nomi `com.antonkarpenko.ffmpegkit`. Barcha `.so` fayllar `0x4000`
+(16 KB) ga moslangan — buni shunday tekshirish mumkin:
 
 ```bash
-FFMPEG_KIT_AAR_URL=https://sizning-serveringiz/ffmpeg-kit-full-gpl-6.0-2.aar npm run ffmpeg:fetch
+unzip -q vendor/m2/com/antonkarpenko/ffmpeg-kit-full-gpl/2.2.1/*.aar 'jni/arm64-v8a/*' -d /tmp/ffk
+readelf -lW /tmp/ffk/jni/arm64-v8a/libavcodec.so | awk '/LOAD/{print $NF}' | sort -u
+```
+
+CI ham har build’da shu tekshiruvni bajaradi, shuning uchun 4 KB’lik build’ga qaytib tushib
+qolish mumkin emas.
+
+`npm run ffmpeg:fetch` AAR’ni `ffmpeg-kit.sources.json` dagi mirror’lardan yuklab, `./vendor/m2`
+ichida kichik Maven repozitoriysi yasaydi. Skript yuklangan faylning zip sarlavhasini tekshiradi,
+shuning uchun 200 qaytarib xato sahifa bergan mirror o‘tkazib yuboriladi. O‘z mirror’ingizni
+ulash uchun:
+
+```bash
+FFMPEG_KIT_AAR_URL=https://sizning-serveringiz/ffmpeg-kit-full-gpl-2.2.1.aar npm run ffmpeg:fetch
 ```
 
 CI’da xuddi shu nom bilan repository variable yoki secret qo‘shsangiz kifoya. Faylni qo‘lda
-`vendor/m2/com/arthenica/ffmpeg-kit-full-gpl/6.0-2/` ichiga qo‘yib, skriptni qayta ishga tushirsangiz
-ham bo‘ladi.
+`vendor/m2/com/antonkarpenko/ffmpeg-kit-full-gpl/2.2.1/` ichiga qo‘yib, skriptni qayta ishga
+tushirsangiz ham bo‘ladi.
 
 `full-gpl` varianti tanlangan, chunki hamma kerakli qism faqat shunda bor: `libass` (uslubli
 subtitr), `libx264`/`libx265` (sifatli eksport), `libmp3lame` (musiqa), `vid.stab` (stabilizatsiya).
-
-Bir eslatma: 6.0-2 binarniklari 4 KB sahifa hajmiga moslangan. Android 15’dagi 16 KB sahifali
-qurilmalarda (va Play Store’ning yangi talabida) muammo bo‘lishi mumkin. Sideload qilingan APK
-uchun bu odatda sezilmaydi; agar kerak bo‘lsa, `FFMPEG_KIT_AAR_URL` orqali 16 KB’ga moslangan
-jamoaviy build’ni ulash mumkin.
 
 ---
 

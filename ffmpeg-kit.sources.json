@@ -1,19 +1,24 @@
 {
   "//": "Where to download the ffmpeg-kit Android AAR from. Arthenica retired the",
-  "//2": "project in 2025 and the com.arthenica:ffmpeg-kit-* artifacts were pulled",
-  "//3": "from Maven Central, so the binary has to be fetched from a mirror that",
-  "//4": "still retains it. Entries are tried top to bottom; the first response that",
-  "//5": "is a real AAR wins (scripts/fetch-ffmpeg-kit.mjs checks the zip header, so",
-  "//6": "a mirror that answers 200 with an error page is skipped rather than cached).",
-  "//7": "Verified live by scripts/probe-ffmpeg-mirrors.mjs. Re-run it if these rot.",
-  "//8": "Set FFMPEG_KIT_AAR_URL to override everything with your own mirror.",
+  "//2": "project in 2025 and its com.arthenica:ffmpeg-kit-* artifacts were both",
+  "//3": "pulled from Maven Central *and* built with 4 KB page alignment, which",
+  "//4": "crashes on Android 15+ devices that use 16 KB pages (the .so files simply",
+  "//5": "fail to load, so the app dies the first time it touches ffmpeg).",
+  "//6": "We therefore link against the maintained community fork, which publishes",
+  "//7": "the same API under com.antonkarpenko and is built with NDK r27+ so every",
+  "//8": "LOAD segment is 0x4000 aligned. Verify with:",
+  "//9": "  readelf -lW jni/arm64-v8a/libavcodec.so | awk '/LOAD/{print $NF}'",
+  "//10": "Entries are tried top to bottom; the first response that is a real AAR",
+  "//11": "wins. Set FFMPEG_KIT_AAR_URL to override everything with your own mirror.",
+  "groupId": "com.antonkarpenko",
   "variant": "full-gpl",
-  "version": "6.0-2",
+  "version": "2.2.1",
   "mirrors": [
-    "https://maven-central.storage-download.googleapis.com/maven2/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
-    "https://maven-central-asia.storage-download.googleapis.com/maven2/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
-    "https://repo.huaweicloud.com/repository/maven/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
-    "https://maven.aliyun.com/repository/public/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
-    "https://maven.aliyun.com/repository/central/com/arthenica/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar"
+    "https://maven-central.storage-download.googleapis.com/maven2/{groupPath}/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://repo1.maven.org/maven2/{groupPath}/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://maven-central-asia.storage-download.googleapis.com/maven2/{groupPath}/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://repo.huaweicloud.com/repository/maven/{groupPath}/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://maven.aliyun.com/repository/public/{groupPath}/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar",
+    "https://maven.aliyun.com/repository/central/{groupPath}/ffmpeg-kit-{variant}/{version}/ffmpeg-kit-{variant}-{version}.aar"
   ]
 }

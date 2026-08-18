@@ -66,13 +66,34 @@ jobs:
       - name: Fetch Skia binaries
         run: npx install-skia
 
-      # ffmpeg-kit's Maven Central artifacts were withdrawn in 2025, so the AAR
-      # is mirrored into ./vendor/m2 before Gradle ever tries to resolve it.
-      # Set the FFMPEG_KIT_AAR_URL variable or secret to use your own mirror.
+      # The AAR is mirrored into ./vendor/m2 before Gradle ever tries to
+      # resolve it. Set FFMPEG_KIT_AAR_URL to use your own mirror.
       - name: Fetch ffmpeg-kit binaries
         env:
           FFMPEG_KIT_AAR_URL: ${{ vars.FFMPEG_KIT_AAR_URL || secrets.FFMPEG_KIT_AAR_URL }}
         run: npm run ffmpeg:fetch
+
+      # Android 15+ devices run with 16 KB memory pages and refuse to load a
+      # shared library whose LOAD segments are 4 KB aligned - the app then dies
+      # the first time it touches ffmpeg. The retired com.arthenica builds are
+      # 4 KB aligned, so guard against ever regressing onto one.
+      - name: Verify ffmpeg-kit is 16 KB page aligned
+        run: |
+          set -euo pipefail
+          aar=$(find vendor/m2 -name 'ffmpeg-kit-*.aar' | head -1)
+          echo "checking $aar"
+          rm -rf /tmp/ffk-check && mkdir -p /tmp/ffk-check
+          unzip -q "$aar" 'jni/arm64-v8a/*' -d /tmp/ffk-check
+          bad=0
+          for so in /tmp/ffk-check/jni/arm64-v8a/*.so; do
+            align=$(readelf -lW "$so" | awk '/LOAD/{print $NF}' | sort -u | tr '\n' ' ')
+            echo "  $(basename "$so"): $align"
+            case "$align" in *0x1000*) bad=1 ;; esac
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::ffmpeg-kit ships 4 KB aligned .so files; they will not load on 16 KB page devices"
+            exit 1
+          fi
 
       - name: Generate the native project
         run: npx expo prebuild --platform android --no-install

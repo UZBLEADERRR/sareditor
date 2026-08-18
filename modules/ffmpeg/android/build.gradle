@@ -13,8 +13,14 @@ version = '1.0.0'
 //   lame + libvorbis + opus                  -> music decoding
 //   vid.stab                                 -> video stabilisation
 // Override from android/gradle.properties if you deliberately want a smaller APK.
+//
+// The group is the maintained community fork rather than the retired
+// com.arthenica build: the latter ships 4 KB page aligned .so files, which fail
+// to load on Android 15+ devices that run 16 KB pages. See
+// ffmpeg-kit.sources.json.
+def ffmpegKitGroup = project.findProperty('sarEditor.ffmpegKit.group') ?: 'com.antonkarpenko'
 def ffmpegKitVariant = project.findProperty('sarEditor.ffmpegKit.variant') ?: 'full-gpl'
-def ffmpegKitVersion = project.findProperty('sarEditor.ffmpegKit.version') ?: '6.0-2'
+def ffmpegKitVersion = project.findProperty('sarEditor.ffmpegKit.version') ?: '2.2.1'
 
 android {
   namespace "expo.modules.ffmpeg"
@@ -33,6 +39,5 @@ dependencies {
   // Resolved from the vendored Maven repo at <repo root>/vendor/m2, which is
   // populated by `npm run ffmpeg:fetch`. The repository itself is registered by
   // the ./plugins/withFFmpegKit.js config plugin.
-  implementation "com.arthenica:ffmpeg-kit-${ffmpegKitVariant}:${ffmpegKitVersion}"
-  implementation 'com.arthenica:smart-exception-java:0.2.1'
+  implementation "${ffmpegKitGroup}:ffmpeg-kit-${ffmpegKitVariant}:${ffmpegKitVersion}"
 }

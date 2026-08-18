@@ -3,13 +3,13 @@ const { withProjectBuildGradle, withGradleProperties } = require('expo/config-pl
 const MARKER = '// sareditor:ffmpeg-kit-repositories';
 
 /**
- * Registers the repositories Gradle needs in order to resolve
- * `com.arthenica:ffmpeg-kit-*`.
+ * Registers the repositories Gradle needs in order to resolve the
+ * `ffmpeg-kit-*` AAR.
  *
- * The artifacts were pulled from Maven Central when ffmpeg-kit was retired, so
- * they are vendored into ./vendor/m2 by `npm run ffmpeg:fetch`. An extra remote
- * repository can be layered on through FFMPEG_KIT_MAVEN_URL for teams that host
- * the binary in their own Nexus/Artifactory.
+ * The AAR is vendored into ./vendor/m2 by `npm run ffmpeg:fetch` so the build
+ * does not depend on a remote being reachable. An extra remote repository can
+ * be layered on through FFMPEG_KIT_MAVEN_URL for teams that host the binary in
+ * their own Nexus/Artifactory.
  */
 function withFFmpegRepositories(config) {
   return withProjectBuildGradle(config, (cfg) => {
@@ -57,6 +57,7 @@ function withFFmpegGradleProperties(config, props) {
         cfg.modResults.push({ type: 'property', key, value });
       }
     };
+    set('sarEditor.ffmpegKit.group', props.groupId);
     set('sarEditor.ffmpegKit.variant', props.variant);
     set('sarEditor.ffmpegKit.version', props.version);
     return cfg;
@@ -64,7 +65,12 @@ function withFFmpegGradleProperties(config, props) {
 }
 
 const withFFmpegKit = (config, props = {}) => {
-  const resolved = { variant: 'full-gpl', version: '6.0-2', ...props };
+  const resolved = {
+    groupId: 'com.antonkarpenko',
+    variant: 'full-gpl',
+    version: '2.2.1',
+    ...props,
+  };
   config = withFFmpegRepositories(config);
   config = withFFmpegGradleProperties(config, resolved);
   return config;

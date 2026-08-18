@@ -1,2 +1,2 @@
--keep class com.arthenica.ffmpegkit.** { *; }
+-keep class com.antonkarpenko.ffmpegkit.** { *; }
 -keep class expo.modules.ffmpeg.** { *; }
