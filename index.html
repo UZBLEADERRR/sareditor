@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0e0e12" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Photo Editor — Cinematic</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ============== BOSH SAHIFA ============== -->
+  <section id="home" class="screen active">
+    <header class="home-header">
+      <div>
+        <h1 class="app-title">Photo Editor</h1>
+        <p class="app-sub">Professional cinematic tahrirlash</p>
+      </div>
+      <button class="icon-btn" id="openSettings" title="Sozlamalar">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19.43 12.98c.04-.32.07-.65.07-.98 0-.33-.03-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.03 7.03 0 0 0-1.7-.98l-.38-2.65A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.61.25-1.18.58-1.7.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98 0 .33.03.66.07.98L2.44 14.63a.5.5 0 0 0-.12.64l2 3.46c.14.24.43.34.69.22l2.49-1c.52.4 1.09.73 1.7.98l.38 2.65A.5.5 0 0 0 10 22h4a.5.5 0 0 0 .5-.42l.38-2.65c.61-.25 1.18-.58 1.7-.98l2.49 1c.26.12.55.02.69-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
+      </button>
+    </header>
+
+    <div class="hero-card" id="pickImageBtn">
+      <div class="hero-icon">
+        <svg viewBox="0 0 24 24" width="40" height="40"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.9 13.98l2.1 2.53 3.1-3.99L19 18H5l3.9-4.02z"/></svg>
+      </div>
+      <div class="hero-text">
+        <h2>Yangi rasm tanlang</h2>
+        <p>Galereyadan rasm yuklab, cinematic uslubda tahrirlang</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" hidden />
+    </div>
+
+    <div class="section-head">
+      <h3>Yaqinda ochilgan loyihalar</h3>
+      <span class="count-badge" id="projectsCount">0</span>
+    </div>
+    <div id="projectsList" class="projects-grid">
+      <p class="empty-state">Hozircha loyihalar yoʻq. Birinchi rasmni yuklang!</p>
+    </div>
+  </section>
+
+  <!-- ============== EDITOR ============== -->
+  <section id="editor" class="screen">
+    <header class="editor-header">
+      <button class="icon-btn" id="backToHome" title="Orqaga">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <div class="editor-title">
+        <span class="dot"></span>
+        <span id="editorFileName">rasm</span>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="undoBtn" title="Bekor qilish">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62A7.46 7.46 0 0 1 12.5 11c3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+        </button>
+        <button class="icon-btn" id="redoBtn" title="Qaytarish">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M18.4 10.6A9.997 9.997 0 0 0 12.5 8c-4.65 0-8.58 3.03-9.97 7.22L4.9 16c1.05-3.19 4.06-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg>
+        </button>
+        <button class="primary-btn" id="exportBtn">Eksport</button>
+      </div>
+    </header>
+
+    <div class="canvas-wrap">
+      <canvas id="mainCanvas"></canvas>
+      <div class="canvas-overlay" id="canvasOverlay" hidden>
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <!-- Pastki vositalar paneli -->
+    <div class="tools-panel">
+      <div class="tools-tabs" id="toolsTabs">
+        <button data-tool="adjust" class="tab active">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+          <span>Sozlash</span>
+        </button>
+        <button data-tool="color" class="tab">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 22C6.49 22 2 17.51 2 12S6.49 2 12 2s10 4.04 10 9c0 3.31-2.69 6-6 6h-1.77c-.28 0-.5.22-.5.5 0 .12.05.23.13.33.41.47.64 1.06.64 1.67A2.5 2.5 0 0 1 12 22zm0-18c-4.41 0-8 3.59-8 8s3.59 8 8 8c.28 0 .5-.22.5-.5 0-.16-.08-.28-.14-.35-.41-.46-.63-1.05-.63-1.65a2.5 2.5 0 0 1 2.5-2.5H16c2.21 0 4-1.79 4-4 0-3.86-3.59-7-8-7z"/></svg>
+          <span>Rang</span>
+        </button>
+        <button data-tool="detail" class="tab">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+          <span>Detal</span>
+        </button>
+        <button data-tool="effects" class="tab">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+          <span>Effekt</span>
+        </button>
+        <button data-tool="lut" class="tab">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H3V5h18v14zM5 15h14v3H5z"/></svg>
+          <span>LUT</span>
+        </button>
+        <button data-tool="crop" class="tab">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7.5 5.6 10 7 8.6 4.5 10 2 7.5 3.4 5 2l1.4 2.5L5 7zm12 12.8L18 17l1.4 2.5L18 22l2.5-1.4L23 22l-1.4-2.5L23 17zM2 13l5 5 1-1-5-5zm14-7v7h2V6h2V4h-2V2h-2v2h-2v2h2zM2 7l5-5 1 1-5 5zm18 5-1.41-1.41L13 16.17V11h-2v5.17l-5.59-5.58L4 12l8 8z"/></svg>
+          <span>Crop</span>
+        </button>
+      </div>
+
+      <div class="tools-content" id="toolsContent">
+        <!-- Adjust -->
+        <div class="tool-page active" data-page="adjust">
+          <div class="slider-row"><label>Yorqinlik</label><input type="range" min="-100" max="100" value="0" data-effect="brightness"><span class="val">0</span></div>
+          <div class="slider-row"><label>Kontrast</label><input type="range" min="-100" max="100" value="0" data-effect="contrast"><span class="val">0</span></div>
+          <div class="slider-row"><label>Ekspozitsiya</label><input type="range" min="-200" max="200" value="0" data-effect="exposure"><span class="val">0</span></div>
+          <div class="slider-row"><label>Toʻyinganlik</label><input type="range" min="-100" max="100" value="0" data-effect="saturation"><span class="val">0</span></div>
+          <div class="slider-row"><label>Vibrance</label><input type="range" min="-100" max="100" value="0" data-effect="vibrance"><span class="val">0</span></div>
+          <div class="slider-row"><label>Sovuq/Issiq</label><input type="range" min="-100" max="100" value="0" data-effect="temperature"><span class="val">0</span></div>
+        </div>
+        <!-- Color (HSL + Curves) -->
+        <div class="tool-page" data-page="color">
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-sub="hsl">HSL</button>
+            <button class="sub-tab" data-sub="curves">Curves</button>
+          </div>
+          <div class="sub-page active" data-sub-page="hsl">
+            <p class="hint">Har bir rang alohida sozlash</p>
+            <div class="hsl-grid" id="hslGrid"></div>
+          </div>
+          <div class="sub-page" data-sub-page="curves">
+            <div class="curve-channel-tabs">
+              <button class="ch-tab active" data-ch="rgb">RGB</button>
+              <button class="ch-tab" data-ch="r">R</button>
+              <button class="ch-tab" data-ch="g">G</button>
+              <button class="ch-tab" data-ch="b">B</button>
+            </div>
+            <div class="curve-wrap">
+              <canvas id="curveCanvas" width="280" height="280"></canvas>
+              <button class="reset-mini" id="resetCurve">Qaytadan</button>
+            </div>
+            <p class="hint">Chiziqni barmoq bilan bosing yoki sudrab oʻzgartiring</p>
+          </div>
+        </div>
+        <!-- Detail -->
+        <div class="tool-page" data-page="detail">
+          <div class="slider-row"><label>Sharpness</label><input type="range" min="0" max="100" value="0" data-effect="sharpen"><span class="val">0</span></div>
+          <div class="slider-row"><label>Clarity</label><input type="range" min="-100" max="100" value="0" data-effect="clarity"><span class="val">0</span></div>
+          <div class="slider-row"><label>Dehaze</label><input type="range" min="-100" max="100" value="0" data-effect="dehaze"><span class="val">0</span></div>
+          <div class="slider-row"><label>Vignette</label><input type="range" min="-100" max="100" value="0" data-effect="vignette"><span class="val">0</span></div>
+          <div class="slider-row"><label>Grain</label><input type="range" min="0" max="100" value="0" data-effect="grain"><span class="val">0</span></div>
+        </div>
+        <!-- Effects -->
+        <div class="tool-page" data-page="effects">
+          <div class="slider-row"><label>Split tone — soya</label><input type="range" min="-100" max="100" value="0" data-effect="splitShade"><span class="val">0</span></div>
+          <div class="slider-row"><label>Split tone — yorugʻlik</label><input type="range" min="-100" max="100" value="0" data-effect="splitHigh"><span class="val">0</span></div>
+          <div class="slider-row"><label>Split tone — balans</label><input type="range" min="-100" max="100" value="0" data-effect="splitBalance"><span class="val">0</span></div>
+          <div class="slider-row"><label>Selective — qizil</label><input type="range" min="-100" max="100" value="0" data-effect="selR"><span class="val">0</span></div>
+          <div class="slider-row"><label>Selective — yashil</label><input type="range" min="-100" max="100" value="0" data-effect="selG"><span class="val">0</span></div>
+          <div class="slider-row"><label>Selective — koʻk</label><input type="range" min="-100" max="100" value="0" data-effect="selB"><span class="val">0</span></div>
+          <div class="slider-row"><label>HDR effekt</label><input type="range" min="0" max="100" value="0" data-effect="hdr"><span class="val">0</span></div>
+          <div class="slider-row"><label>Fade</label><input type="range" min="0" max="100" value="0" data-effect="fade"><span class="val">0</span></div>
+        </div>
+        <!-- LUT -->
+        <div class="tool-page" data-page="lut">
+          <p class="hint">Cinematic uslubdagi tayyor ranglar</p>
+          <div class="lut-grid" id="lutGrid"></div>
+          <label class="lut-import">
+            <input type="file" id="cubeInput" accept=".cube" hidden />
+            <span>📁 .cube fayl yuklash</span>
+          </label>
+          <div id="customLuts" class="lut-grid"></div>
+        </div>
+        <!-- Crop -->
+        <div class="tool-page" data-page="crop">
+          <p class="hint">Aspect ratio tanlang</p>
+          <div class="ratio-grid">
+            <button data-ratio="free" class="ratio-btn active">Erkin</button>
+            <button data-ratio="1:1" class="ratio-btn">1:1</button>
+            <button data-ratio="4:3" class="ratio-btn">4:3</button>
+            <button data-ratio="16:9" class="ratio-btn">16:9</button>
+            <button data-ratio="9:16" class="ratio-btn">9:16</button>
+            <button data-ratio="2:3" class="ratio-btn">2:3</button>
+            <button data-ratio="3:2" class="ratio-btn">3:2</button>
+          </div>
+          <div class="slider-row"><label>Burchak aylanishi</label><input type="range" min="-180" max="180" value="0" data-effect="rotate"><span class="val">0°</span></div>
+          <button class="primary-btn block" id="applyCropBtn">Crop qoʻllash</button>
+          <button class="ghost-btn block" id="resetCropBtn">Bekor qilish</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== SOZLAMALAR ============== -->
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Sozlamalar</h3>
+        <button class="icon-btn" data-close-modal>
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <h4>Mavzu</h4>
+        <div class="theme-row">
+          <label><input type="radio" name="theme" value="auto" checked> Tizimga qarab</label>
+          <label><input type="radio" name="theme" value="dark"> Qorongʻi</label>
+          <label><input type="radio" name="theme" value="light"> Yorugʻ</label>
+        </div>
+        <h4>Accent rang</h4>
+        <div class="accent-row" id="accentRow">
+          <button class="accent" data-color="#5B8DEF" style="--c:#5B8DEF"></button>
+          <button class="accent" data-color="#34C759" style="--c:#34C759"></button>
+          <button class="accent" data-color="#FFCC00" style="--c:#FFCC00"></button>
+          <button class="accent" data-color="#FF3B30" style="--c:#FF3B30"></button>
+          <button class="accent" data-color="#AF52DE" style="--c:#AF52DE"></button>
+        </div>
+        <h4>Saqlangan loyihalar</h4>
+        <button class="ghost-btn block" id="clearProjectsBtn">Barchasini oʻchirish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== LOYIHANI SAQLASH ============== -->
+  <div class="modal" id="saveModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Loyihani saqlash</h3>
+        <button class="icon-btn" data-close-modal>
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="projectName" placeholder="Loyiha nomi" class="text-input" />
+        <div class="modal-actions">
+          <button class="ghost-btn" data-close-modal>Bekor</button>
+          <button class="primary-btn" id="saveProjectBtn">Saqlash</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== EKSPORT ============== -->
+  <div class="modal" id="exportModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Eksport qilish</h3>
+        <button class="icon-btn" data-close-modal>
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <h4>Oʻlcham</h4>
+        <div class="size-presets" id="sizePresets">
+          <button data-w="1080" data-h="1080">Instagram 1:1</button>
+          <button data-w="1080" data-h="1350">IG Post 4:5</button>
+          <button data-w="1080" data-h="1920">Story / Reels</button>
+          <button data-w="1920" data-h="1080">YouTube</button>
+          <button data-w="2160" data-h="3840">4K</button>
+        </div>
+        <div class="size-custom">
+          <input type="number" id="exportW" placeholder="Kenglik" class="text-input" />
+          <span>×</span>
+          <input type="number" id="exportH" placeholder="Balandlik" class="text-input" />
+        </div>
+        <h4>Sifat</h4>
+        <div class="quality-row">
+          <label><input type="radio" name="quality" value="0.6"> Low</label>
+          <label><input type="radio" name="quality" value="0.8" checked> Medium</label>
+          <label><input type="radio" name="quality" value="0.95"> High</label>
+          <label><input type="radio" name="quality" value="1.0"> Max</label>
+        </div>
+        <h4>EXIF</h4>
+        <div class="quality-row">
+          <label><input type="checkbox" id="keepExif" checked> EXIF maʼlumotlarni saqlash</label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-btn" data-close-modal>Bekor</button>
+          <button class="primary-btn" id="doExportBtn">💾 Saqlash</button>
+        </div>
+        <p class="hint" id="exportInfo"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== TOAST ============== -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
